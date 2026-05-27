@@ -68,7 +68,7 @@ class EquipoComputoInfolist
                             // --- Encabezado de estado ---
                             Section::make('Estado del Registro')
                                 ->schema([
-                                    Grid::make(3)
+                                    Grid::make(4)
                                         ->schema([
 
                                             TextEntry::make('tipo_movimiento')
@@ -96,9 +96,18 @@ class EquipoComputoInfolist
 
                                             TextEntry::make('fecha_entrega')
                                                 ->label('Fecha de entrega')
-                                                ->date('d \d\e F \d\e Y')
+                                                ->dateTime('d \d\e F \d\e Y h:i A')
                                                 ->badge()
-                                                ->color('gray')
+                                                ->color('success')
+                                                ->icon('heroicon-o-calendar')
+                                                ->size(TextSize::Large)
+                                                ->placeholder('Sin fecha registrada'),
+
+                                            TextEntry::make('fecha_baja')
+                                                ->label('Fecha Baja')
+                                                ->dateTime('d \d\e F \d\e Y h:i A')
+                                                ->badge()
+                                                ->color('danger')
                                                 ->icon('heroicon-o-calendar')
                                                 ->size(TextSize::Large)
                                                 ->placeholder('Sin fecha registrada'),

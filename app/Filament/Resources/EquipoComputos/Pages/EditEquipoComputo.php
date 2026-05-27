@@ -22,4 +22,17 @@ class EditEquipoComputo extends EditRecord
             RestoreAction::make(),
         ];
     }
+
+    /**
+     * Si el tipo_movimiento cambia a cualquier valor distinto de 'baja',
+     * se limpia la fecha_baja para que quede en null.
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        if (($data['tipo_movimiento'] ?? null) !== 'baja') {
+            $data['fecha_baja'] = null;
+        }
+
+        return $data;
+    }
 }

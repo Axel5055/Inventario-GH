@@ -24,7 +24,7 @@ return new class extends Migration
                 'mantenimiento',
                 'prestamo_temporal'
             ])->default('alta');
-            $table->date('fecha_entrega');
+            $table->datetime('fecha_entrega');
 
             // === DATOS DEL USUARIO ===
             $table->foreignId('razon_social_id')->constrained('razones_sociales');

@@ -2,11 +2,15 @@
 
 namespace App\Filament\Resources\EquipoComputos\Tables;
 
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -106,6 +110,37 @@ class EquipoComputosTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+
+                Action::make('dar_de_baja')
+                    ->label('Dar de Baja')
+                    ->icon('heroicon-o-arrow-down-circle')
+                    ->color('danger')
+                    ->visible(fn($record) => $record->tipo_movimiento !== 'baja')
+                    ->requiresConfirmation()
+                    ->modalHeading('Dar de Baja el Equipo')
+                    ->modalDescription('Se cambiará el status a "Baja" y se registrará la fecha de baja. Esta acción puede revertirse editando el registro.')
+                    ->modalSubmitActionLabel('Confirmar Baja')
+                    ->form([
+                        DateTimePicker::make('fecha_baja')
+                            ->label('Fecha de Baja')
+                            ->default(now())
+                            ->required()
+                            ->seconds(false)
+                            ->displayFormat('d/m/Y'),
+                    ])
+                    ->action(function ($record, array $data): void {
+                        $record->update([
+                            'tipo_movimiento' => 'baja',
+                            'fecha_baja'      => $data['fecha_baja'],
+                        ]);
+
+                        Notification::make()
+                            ->title('Equipo dado de baja')
+                            ->body("El equipo de {$record->nombre_usuario} fue dado de baja correctamente.")
+                            ->success()
+                            ->send();
+                    }),
+
                 DeleteAction::make(),
             ])
             ->bulkActions([

@@ -17,7 +17,7 @@ return new class extends Migration
 
             // === TIPO DE MOVIMIENTO ===
             $table->enum('tipo_movimiento', ['alta', 'baja'])->default('alta');
-            $table->date('fecha_entrega');
+            $table->datetime('fecha_entrega');
 
             // === DATOS DEL USUARIO ===
             $table->foreignId('razon_social_id')->constrained('razones_sociales');

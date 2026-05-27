@@ -7,6 +7,7 @@ use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
@@ -60,7 +61,7 @@ class EquipoCelularForm
                                                 ->required()
                                                 ->native(false),
 
-                                            DatePicker::make('fecha_entrega')
+                                            DateTimePicker::make('fecha_entrega')
                                                 ->label('Fecha de Entrega')
                                                 ->required()
                                                 ->seconds(false)

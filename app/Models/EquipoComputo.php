@@ -16,6 +16,7 @@ class EquipoComputo extends Model
     protected $fillable = [
         'tipo_movimiento',
         'fecha_entrega',
+        'fecha_baja',
         'razon_social_id',
         'nombre_usuario',
         'correo_electronico',
@@ -49,7 +50,8 @@ class EquipoComputo extends Model
     ];
 
     protected $casts = [
-        'fecha_entrega' => 'date',
+        'fecha_entrega' => 'datetime',
+        'fecha_baja' => 'datetime',
         'antivirus_fecha_instalacion' => 'date',
         'antivirus_vigencia' => 'date',
     ];

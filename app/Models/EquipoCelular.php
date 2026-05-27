@@ -15,6 +15,7 @@ class EquipoCelular extends Model
     protected $fillable = [
         'tipo_movimiento',
         'fecha_entrega',
+        'fecha_baja',
         'razon_social_id',
         'nombre_usuario',
         'sucursal_id',
@@ -33,7 +34,8 @@ class EquipoCelular extends Model
     ];
 
     protected $casts = [
-        'fecha_entrega' => 'date',
+        'fecha_entrega' => 'datetime',
+        'fecha_baja' => 'datetime',
     ];
 
     public function razonSocial(): BelongsTo
