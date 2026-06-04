@@ -10,12 +10,7 @@ class Sucursal extends Model
 {
     protected $table = 'sucursales';
 
-    protected $fillable = ['razon_social_id', 'nombre', 'ciudad', 'activo'];
+    protected $fillable = ['nombre', 'ciudad', 'activo'];
 
     protected $casts = ['activo' => 'boolean'];
-
-    public function razonSocial(): BelongsTo
-    {
-        return $this->belongsTo(RazonSocial::class);
-    }
 }

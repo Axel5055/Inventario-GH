@@ -9,6 +9,7 @@ use App\Filament\Resources\EntregaDispositivos\Pages\ViewEntregaDispositivo;
 use App\Filament\Resources\EntregaDispositivos\Schemas\EntregaDispositivoForm;
 use App\Filament\Resources\EntregaDispositivos\Schemas\EntregaDispositivoInfolist;
 use App\Filament\Resources\EntregaDispositivos\Tables\EntregaDispositivosTable;
+use App\Filament\Traits\HasRoleAccess;
 use App\Models\EntregaDispositivo;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -21,6 +22,7 @@ use UnitEnum;
 
 class EntregaDispositivoResource extends Resource
 {
+
     protected static ?string $model = EntregaDispositivo::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSwatch;

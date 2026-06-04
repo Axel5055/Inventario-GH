@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Permission\Traits\HasRoles;
 
 class EquipoComputo extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasRoles;
 
     protected $table = 'equipos_computo';
 
@@ -22,7 +23,7 @@ class EquipoComputo extends Model
         'correo_electronico',
         'sucursal_id',
         'area_id',
-        'puesto',
+        'ext',
         'tipo_equipo',
         'marca_id',
         'modelo',

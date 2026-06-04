@@ -71,11 +71,6 @@ class EntregaDispositivoForm
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('rfc')->required(),
                                                 ]),
-
-                                            Toggle::make('activo')
-                                                ->label('Registro Activo')
-                                                ->default(true)
-                                                ->inline(false),
                                         ]),
 
                                     // ── Columna derecha: datos del usuario ──
@@ -96,13 +91,8 @@ class EntregaDispositivoForm
 
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
-                                                ->options(function ($get) {
-                                                    $id = $get('razon_social_id');
-                                                    if (!$id) return [];
-                                                    return Sucursal::where('razon_social_id', $id)
-                                                        ->where('activo', true)
-                                                        ->pluck('nombre', 'id');
-                                                })
+                                                ->relationship('sucursal', 'nombre')
+                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
                                                 ->required()
                                                 ->native(false)
                                                 ->live()

@@ -112,11 +112,6 @@ class EquipoCelularForm
                                                 ->native(false)
                                                 ->live()
                                                 ->createOptionForm([
-                                                    Select::make('razon_social_id')
-                                                        ->label('Razón Social')
-                                                        ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
-                                                        ->required()
-                                                        ->native(false),
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
                                                 ]),

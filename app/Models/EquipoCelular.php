@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Permission\Traits\HasRoles;
 
 class EquipoCelular extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasRoles;
 
     protected $table = 'equipos_celulares';
 
@@ -20,7 +21,7 @@ class EquipoCelular extends Model
         'nombre_usuario',
         'sucursal_id',
         'area_id',
-        'puesto',
+        'ext',
         'tipo_equipo',
         'marca_id',
         'modelo',

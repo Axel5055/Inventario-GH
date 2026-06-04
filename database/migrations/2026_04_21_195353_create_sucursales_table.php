@@ -14,7 +14,6 @@ return new class extends Migration
     {
         Schema::create('sucursales', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('razon_social_id')->constrained('razones_sociales')->cascadeOnDelete();
             $table->string('nombre');
             $table->string('ciudad')->nullable();
             $table->boolean('activo')->default(true);

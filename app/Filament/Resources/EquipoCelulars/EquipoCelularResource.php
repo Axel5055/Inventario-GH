@@ -9,6 +9,7 @@ use App\Filament\Resources\EquipoCelulars\Pages\ViewEquipoCelular;
 use App\Filament\Resources\EquipoCelulars\Schemas\EquipoCelularForm;
 use App\Filament\Resources\EquipoCelulars\Schemas\EquipoCelularInfolist;
 use App\Filament\Resources\EquipoCelulars\Tables\EquipoCelularsTable;
+use App\Filament\Traits\HasRoleAccess;
 use App\Models\EquipoCelular;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -21,6 +22,7 @@ use UnitEnum;
 
 class EquipoCelularResource extends Resource
 {
+
     protected static ?string $model = EquipoCelular::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDevicePhoneMobile;

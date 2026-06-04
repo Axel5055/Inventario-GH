@@ -155,9 +155,14 @@ class EquipoComputoInfolist
                                         ->badge()
                                         ->color('gray'),
 
-                                    TextEntry::make('puesto')
-                                        ->label('Puesto')
-                                        ->icon('heroicon-o-briefcase')
+                                    TextEntry::make('ext')
+                                        ->label('Extensión')
+                                        ->icon('heroicon-o-phone')
+                                        ->badge()
+                                        ->color('warning')
+                                        ->copyable()
+                                        ->copyMessage('¡Copiado!')
+                                        ->copyMessageDuration(1500)
                                         ->placeholder('No especificado'),
                                 ]),
 

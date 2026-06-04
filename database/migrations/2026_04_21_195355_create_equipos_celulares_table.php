@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('nombre_usuario');
             $table->foreignId('sucursal_id')->constrained('sucursales');
             $table->foreignId('area_id')->constrained('areas');
-            $table->string('puesto')->nullable();
+            $table->string('ext')->nullable();
 
             // === FICHA TÉCNICA ===
             $table->enum('tipo_equipo', [

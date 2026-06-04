@@ -21,6 +21,7 @@ use UnitEnum;
 
 class EquipoComputoResource extends Resource
 {
+
     protected static ?string $model = EquipoComputo::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedComputerDesktop;

@@ -109,9 +109,9 @@ class EquipoComputoForm
                                                 ->live(debounce: 500)
                                                 ->afterStateUpdated(fn($state, $set) => $set('usuario_referencia', $state)),
 
-                                            TextInput::make('puesto')
-                                                ->label('Puesto')
-                                                ->maxLength(255),
+                                            TextInput::make('ext')
+                                                ->label('Extensión')
+                                                ->maxLength(5),
 
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
@@ -121,13 +121,6 @@ class EquipoComputoForm
                                                 ->native(false)
                                                 ->live()
                                                 ->createOptionForm([
-                                                    Select::make('razon_social_id')
-                                                        ->label('Razón Social')
-                                                        ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
-                                                        ->required()
-                                                        ->native(false)
-                                                        ->live()
-                                                        ->afterStateUpdated(fn($set) => $set('sucursal_id', null)),
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
                                                 ]),
