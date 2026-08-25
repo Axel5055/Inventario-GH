@@ -9,7 +9,6 @@ use App\Filament\Resources\EquipoCelulars\Pages\ViewEquipoCelular;
 use App\Filament\Resources\EquipoCelulars\Schemas\EquipoCelularForm;
 use App\Filament\Resources\EquipoCelulars\Schemas\EquipoCelularInfolist;
 use App\Filament\Resources\EquipoCelulars\Tables\EquipoCelularsTable;
-use App\Filament\Traits\HasRoleAccess;
 use App\Models\EquipoCelular;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -27,11 +26,11 @@ class EquipoCelularResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDevicePhoneMobile;
 
-    protected static ?string $navigationLabel = 'Equipos Moviles';
-    protected static ?string $modelLabel = 'Equipo Movil';
-    protected static ?string $pluralModelLabel = 'Equipos Moviles';
+    protected static ?string $navigationLabel = 'Equipos Móviles';
+    protected static ?string $modelLabel = 'Equipo Móvil';
+    protected static ?string $pluralModelLabel = 'Equipos Móviles';
     protected static string | UnitEnum | null $navigationGroup = 'Inventario';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 20;
 
     protected static ?string $recordTitleAttribute = 'nombre_usuario';
 

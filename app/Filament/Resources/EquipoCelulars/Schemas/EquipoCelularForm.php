@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\EquipoCelulars\Schemas;
 
 use App\Models\Area;
+use App\Models\EquipoCelular;
 use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -14,6 +16,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Actions\Action as NotificationAction;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -107,14 +111,27 @@ class EquipoCelularForm
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(
+                                                    fn($get) => Sucursal::where('activo', true)
+                                                        ->when(
+                                                            $get('razon_social_id'),
+                                                            fn($query, $razonSocialId) => $query->where('razon_social_id', $razonSocialId)
+                                                        )
+                                                        ->pluck('nombre', 'id')
+                                                )
                                                 ->required()
                                                 ->native(false)
                                                 ->live()
+                                                ->disabled(fn($get) => blank($get('razon_social_id')))
+                                                ->helperText('Selecciona primero una Razón Social.')
                                                 ->createOptionForm([
+                                                    Hidden::make('razon_social_id'),
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionAction(
+                                                    fn($action, $get) => $action->fillForm(['razon_social_id' => $get('razon_social_id')])
+                                                ),
 
                                             Select::make('area_id')
                                                 ->label('Área')
@@ -195,7 +212,21 @@ class EquipoCelularForm
                                             TextInput::make('imei')
                                                 ->label('IMEI')
                                                 ->maxLength(20)
-                                                ->placeholder('15 dígitos'),
+                                                ->placeholder('15 dígitos')
+                                                ->helperText('El mismo IMEI se puede reutilizar si el equipo anterior con ese IMEI ya está de baja (equipo reciclado a otra persona).')
+                                                ->live(onBlur: true)
+                                                ->afterStateUpdated(function ($state, ?EquipoCelular $record) {
+                                                    self::avisarSiImeiActivo($state, $record);
+                                                })
+                                                ->rules([
+                                                    fn(?EquipoCelular $record): Closure => function (string $attribute, $value, Closure $fail) use ($record) {
+                                                        $conflicto = self::buscarConflictoImei($value, $record);
+
+                                                        if ($conflicto) {
+                                                            $fail("Ya existe un equipo ACTIVO con este IMEI, asignado a «{$conflicto->nombre_usuario}». Debes darlo de baja antes de reutilizarlo.");
+                                                        }
+                                                    },
+                                                ]),
 
                                             TextInput::make('iccid')
                                                 ->label('ICCID (SIM)')
@@ -222,6 +253,8 @@ class EquipoCelularForm
                                             FileUpload::make('responsiva_pdf')
                                                 ->label('Cargar PDF')
                                                 ->acceptedFileTypes(['application/pdf'])
+                                                ->directory('responsivas/celulares')
+                                                ->disk('local')
                                                 ->maxSize(10240)
                                                 ->downloadable()
                                                 ->openable(),
@@ -230,5 +263,56 @@ class EquipoCelularForm
                         ]),
                 ]),
         ]);
+    }
+
+    /**
+     * Un mismo IMEI es válido en varios registros históricos (equipo
+     * reciclado a otra persona), pero solo uno puede estar activo
+     * (tipo_movimiento distinto de 'baja') a la vez.
+     */
+    private static function buscarConflictoImei(?string $imei, ?EquipoCelular $record): ?EquipoCelular
+    {
+        if (blank($imei)) {
+            return null;
+        }
+
+        return EquipoCelular::query()
+            ->where('imei', $imei)
+            ->where('tipo_movimiento', '!=', 'baja')
+            ->when($record, fn($query) => $query->whereKeyNot($record->getKey()))
+            ->first();
+    }
+
+    private static function avisarSiImeiActivo(?string $imei, ?EquipoCelular $record): void
+    {
+        $conflicto = self::buscarConflictoImei($imei, $record);
+
+        if (! $conflicto) {
+            return;
+        }
+
+        Notification::make()
+            ->warning()
+            ->title('IMEI en uso')
+            ->body("Ya existe un equipo ACTIVO con este IMEI, asignado a «{$conflicto->nombre_usuario}». Puedes darlo de baja para reutilizarlo en este nuevo registro.")
+            ->persistent()
+            ->actions([
+                NotificationAction::make('dar_de_baja_equipo_celular_' . $conflicto->id)
+                    ->label('Dar de baja ese equipo')
+                    ->color('danger')
+                    ->button()
+                    ->action(function () use ($conflicto) {
+                        $conflicto->update([
+                            'tipo_movimiento' => 'baja',
+                            'fecha_baja' => now(),
+                        ]);
+
+                        Notification::make()
+                            ->title('Equipo anterior dado de baja')
+                            ->success()
+                            ->send();
+                    }),
+            ])
+            ->send();
     }
 }

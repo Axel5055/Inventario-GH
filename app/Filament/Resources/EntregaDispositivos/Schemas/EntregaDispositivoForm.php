@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\EntregaDispositivos\Schemas;
 
+use App\Models\Area;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
 use Filament\Forms\Components\DatePicker;
@@ -62,6 +63,7 @@ class EntregaDispositivoForm
 
                                             Select::make('razon_social_id')
                                                 ->label('Razón Social')
+                                                ->relationship('razonSocial', 'nombre')
                                                 ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
                                                 ->required()
                                                 ->native(false)
@@ -77,33 +79,64 @@ class EntregaDispositivoForm
                                     Section::make('Datos del Usuario')
                                         ->icon('heroicon-o-user')
                                         ->columnSpan(1)
+                                        ->columns(2)
                                         ->schema([
 
                                             TextInput::make('nombre_usuario')
                                                 ->label('Nombre Completo del Usuario')
                                                 ->required()
                                                 ->maxLength(255)
+                                                ->columnSpanFull()
                                                 ->live(debounce: 500)
                                                 ->afterStateUpdated(
                                                     fn($state, $set) =>
                                                     $set('usuario_referencia', strtolower(str_replace(' ', '.', $state ?? '')))
                                                 ),
 
+                                            TextInput::make('correo_electronico')
+                                                ->label('Correo Electrónico')
+                                                ->email()
+                                                ->required()
+                                                ->maxLength(255)
+                                                ->columnSpanFull(),
+
+                                            TextInput::make('puesto')
+                                                ->label('Puesto')
+                                                ->maxLength(255),
+
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(
+                                                    fn($get) => Sucursal::where('activo', true)
+                                                        ->when(
+                                                            $get('razon_social_id'),
+                                                            fn($query, $razonSocialId) => $query->where('razon_social_id', $razonSocialId)
+                                                        )
+                                                        ->pluck('nombre', 'id')
+                                                )
                                                 ->required()
                                                 ->native(false)
                                                 ->live()
+                                                ->disabled(fn($get) => blank($get('razon_social_id')))
+                                                ->helperText('Selecciona primero una Razón Social.')
                                                 ->createOptionForm([
-                                                    Select::make('razon_social_id')
-                                                        ->label('Razón Social')
-                                                        ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
-                                                        ->required()
-                                                        ->native(false),
+                                                    Hidden::make('razon_social_id'),
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
+                                                ])
+                                                ->createOptionAction(
+                                                    fn($action, $get) => $action->fillForm(['razon_social_id' => $get('razon_social_id')])
+                                                ),
+
+                                            Select::make('area_id')
+                                                ->label('Área')
+                                                ->relationship('area', 'nombre')
+                                                ->options(Area::where('activo', true)->pluck('nombre', 'id'))
+                                                ->required()
+                                                ->native(false)
+                                                ->createOptionForm([
+                                                    TextInput::make('nombre')->required(),
                                                 ]),
 
                                             Hidden::make('usuario_referencia'),
@@ -181,7 +214,7 @@ class EntregaDispositivoForm
                                                 ->label('Cargar PDF')
                                                 ->acceptedFileTypes(['application/pdf'])
                                                 ->directory('responsivas/dispositivos')
-                                                ->disk('public')
+                                                ->disk('local')
                                                 ->maxSize(10240)
                                                 ->downloadable()
                                                 ->openable()

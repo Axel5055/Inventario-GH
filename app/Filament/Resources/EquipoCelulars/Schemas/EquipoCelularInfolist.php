@@ -43,7 +43,7 @@ class EquipoCelularInfolist
                                             ->icon('heroicon-o-arrow-down-tray')
                                             ->color('success')
                                             ->visible(fn($record) => filled($record->responsiva_pdf))
-                                            ->action(fn($record) => response()->download(Storage::path($record->responsiva_pdf))),
+                                            ->action(fn($record) => response()->download(Storage::disk('local')->path($record->responsiva_pdf))),
                                     ])->alignEnd()->hiddenLabel(),
                                 ]),
 
@@ -179,8 +179,9 @@ class EquipoCelularInfolist
                                         ->icon('heroicon-o-squares-2x2')
                                         ->placeholder('Sin modelo'),
 
-                                    IconEntry::make('activo')
+                                    IconEntry::make('esta_activo')
                                         ->label('Equipo Activo')
+                                        ->state(fn($record) => $record->tipo_movimiento !== 'baja' && ! $record->trashed())
                                         ->boolean(),
                                 ]),
 

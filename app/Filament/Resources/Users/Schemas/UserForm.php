@@ -22,7 +22,9 @@ class UserForm
                 TextInput::make('password')
                     ->password()
                     ->revealable()
-                    ->required(),
+                    ->required(fn(string $operation): bool => $operation === 'create')
+                    ->dehydrated(fn(?string $state): bool => filled($state))
+                    ->helperText('Déjalo en blanco para mantener la contraseña actual.'),
                 Select::make('roles')
                     ->relationship('roles', 'name')
                     ->multiple()

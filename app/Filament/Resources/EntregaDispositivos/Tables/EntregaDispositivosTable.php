@@ -8,8 +8,8 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
@@ -19,33 +19,57 @@ class EntregaDispositivosTable
     {
         return $table
             ->columns([
+                TextColumn::make('tipo_movimiento')
+                    ->label('Movimiento')
+                    ->badge()
+                    ->color(fn($state) => match ($state) {
+                        'entrega'    => 'success',
+                        'devolucion' => 'warning',
+                        default      => 'gray',
+                    })
+                    ->formatStateUsing(fn($state) => match ($state) {
+                        'entrega'    => '📦 Entrega',
+                        'devolucion' => '↩️ Devolución',
+                        default      => ucfirst($state),
+                    }),
                 TextColumn::make('nombre_usuario')
-                    ->searchable(),
-                TextColumn::make('usuario_referencia')
-                    ->searchable(),
-                TextColumn::make('razonSocial.id')
-                    ->searchable(),
-                TextColumn::make('sucursal.id')
-                    ->searchable(),
+                    ->label('Usuario')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('correo_electronico')
+                    ->label('Correo')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('razonSocial.nombre')
+                    ->label('Razón Social')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('sucursal.nombre')
+                    ->label('Sucursal')
+                    ->toggleable(),
+                TextColumn::make('area.nombre')
+                    ->label('Área')
+                    ->toggleable(),
                 TextColumn::make('fecha_entrega')
+                    ->label('Fecha')
                     ->date()
                     ->sortable(),
                 TextColumn::make('tipo_dispositivo')
+                    ->label('Tipo')
                     ->badge(),
                 TextColumn::make('descripcion')
                     ->searchable(),
                 TextColumn::make('marca')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('modelo')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('numero_serie')
-                    ->searchable(),
-                TextColumn::make('tipo_movimiento')
-                    ->badge(),
-                IconColumn::make('activo')
-                    ->boolean(),
-                TextColumn::make('responsiva_pdf')
-                    ->searchable(),
+                    ->label('No. Serie')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -60,6 +84,17 @@ class EntregaDispositivosTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('tipo_movimiento')
+                    ->label('Tipo de Movimiento')
+                    ->options([
+                        'entrega'    => '📦 Entrega',
+                        'devolucion' => '↩️ Devolución',
+                    ]),
+
+                SelectFilter::make('razon_social_id')
+                    ->label('Razón Social')
+                    ->relationship('razonSocial', 'nombre'),
+
                 TrashedFilter::make(),
             ])
             ->recordActions([

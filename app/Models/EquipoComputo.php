@@ -6,11 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Spatie\Permission\Traits\HasRoles;
 
 class EquipoComputo extends Model
 {
-    use SoftDeletes, HasRoles;
+    use SoftDeletes;
 
     protected $table = 'equipos_computo';
 
@@ -35,6 +34,7 @@ class EquipoComputo extends Model
         'usuario_equipo',
         'pin_password',
         'responsiva_pdf',
+        'sistema_operativo',
         'windows_version',
         'windows_key',
         'office_version',

@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\EquipoComputos\Schemas;
 
 use App\Models\Area;
+use App\Models\EquipoComputo;
 use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -14,6 +16,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Actions\Action as NotificationAction;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -116,14 +120,27 @@ class EquipoComputoForm
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(
+                                                    fn($get) => Sucursal::where('activo', true)
+                                                        ->when(
+                                                            $get('razon_social_id'),
+                                                            fn($query, $razonSocialId) => $query->where('razon_social_id', $razonSocialId)
+                                                        )
+                                                        ->pluck('nombre', 'id')
+                                                )
                                                 ->required()
                                                 ->native(false)
                                                 ->live()
+                                                ->disabled(fn($get) => blank($get('razon_social_id')))
+                                                ->helperText('Selecciona primero una Razón Social.')
                                                 ->createOptionForm([
+                                                    Hidden::make('razon_social_id'),
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionAction(
+                                                    fn($action, $get) => $action->fillForm(['razon_social_id' => $get('razon_social_id')])
+                                                ),
 
                                             Select::make('area_id')
                                                 ->label('Área')
@@ -161,7 +178,7 @@ class EquipoComputoForm
                                                 ->label('Tipo de Equipo')
                                                 ->options([
                                                     'laptop'      => 'Laptop',
-                                                    'escritorio'  => 'Desktop / PC',
+                                                    'desktop'     => 'Desktop / PC',
                                                     'all_in_one'  => 'All in One',
                                                     'workstation' => 'Workstation',
                                                     'mini_pc'     => 'Mini PC',
@@ -198,8 +215,21 @@ class EquipoComputoForm
                                             TextInput::make('numero_serie')
                                                 ->label('Número de Serie')
                                                 ->required()
-                                                ->unique(ignoreRecord: true)
-                                                ->maxLength(200),
+                                                ->maxLength(200)
+                                                ->helperText('El mismo número se puede reutilizar si el equipo anterior con ese número ya está de baja (equipo reciclado a otra persona).')
+                                                ->live(onBlur: true)
+                                                ->afterStateUpdated(function ($state, ?EquipoComputo $record) {
+                                                    self::avisarSiNumeroSerieActivo($state, $record);
+                                                })
+                                                ->rules([
+                                                    fn(?EquipoComputo $record): Closure => function (string $attribute, $value, Closure $fail) use ($record) {
+                                                        $conflicto = self::buscarConflictoNumeroSerie($value, $record);
+
+                                                        if ($conflicto) {
+                                                            $fail("Ya existe un equipo ACTIVO con este número de serie, asignado a «{$conflicto->nombre_usuario}». Debes darlo de baja antes de reutilizarlo.");
+                                                        }
+                                                    },
+                                                ]),
 
                                             TextInput::make('procesador')
                                                 ->label('Procesador')
@@ -247,6 +277,8 @@ class EquipoComputoForm
                                                     FileUpload::make('responsiva_pdf')
                                                         ->label('Cargar PDF')
                                                         ->acceptedFileTypes(['application/pdf'])
+                                                        ->directory('responsivas/computo')
+                                                        ->disk('local')
                                                         ->maxSize(10240)
                                                         ->downloadable()
                                                         ->openable(),
@@ -270,6 +302,22 @@ class EquipoComputoForm
                                         ->icon('heroicon-o-window')
                                         ->columnSpan(1)
                                         ->schema([
+                                            Select::make('sistema_operativo')
+                                                ->label('Sistema Operativo')
+                                                ->options([
+                                                    'windows' => 'Windows',
+                                                    'apple'   => 'Apple (macOS)',
+                                                ])
+                                                ->required()
+                                                ->native(false)
+                                                ->live()
+                                                ->afterStateUpdated(function ($state, $set) {
+                                                    if ($state !== 'windows') {
+                                                        $set('windows_version', null);
+                                                        $set('windows_key', null);
+                                                    }
+                                                }),
+
                                             Select::make('windows_version')
                                                 ->label('Versión de Windows')
                                                 ->options([
@@ -279,14 +327,16 @@ class EquipoComputoForm
                                                     'Windows 11 Pro'        => 'Windows 11 Pro',
                                                     'Windows 11 Enterprise' => 'Windows 11 Enterprise',
                                                 ])
-                                                ->required()
-                                                ->native(false),
+                                                ->native(false)
+                                                ->visible(fn($get) => $get('sistema_operativo') === 'windows')
+                                                ->required(fn($get) => $get('sistema_operativo') === 'windows'),
 
                                             TextInput::make('windows_key')
                                                 ->label('Clave / Key de Windows')
                                                 ->password()
                                                 ->revealable()
-                                                ->maxLength(255),
+                                                ->maxLength(255)
+                                                ->visible(fn($get) => $get('sistema_operativo') === 'windows'),
                                         ]),
 
                                     // ── Antivirus ──
@@ -392,5 +442,56 @@ class EquipoComputoForm
                         ]),
                 ]),
         ]);
+    }
+
+    /**
+     * Un mismo número de serie es válido en varios registros históricos
+     * (equipo reciclado a otra persona), pero solo uno puede estar activo
+     * (tipo_movimiento distinto de 'baja') a la vez.
+     */
+    private static function buscarConflictoNumeroSerie(?string $numeroSerie, ?EquipoComputo $record): ?EquipoComputo
+    {
+        if (blank($numeroSerie)) {
+            return null;
+        }
+
+        return EquipoComputo::query()
+            ->where('numero_serie', $numeroSerie)
+            ->where('tipo_movimiento', '!=', 'baja')
+            ->when($record, fn($query) => $query->whereKeyNot($record->getKey()))
+            ->first();
+    }
+
+    private static function avisarSiNumeroSerieActivo(?string $numeroSerie, ?EquipoComputo $record): void
+    {
+        $conflicto = self::buscarConflictoNumeroSerie($numeroSerie, $record);
+
+        if (! $conflicto) {
+            return;
+        }
+
+        Notification::make()
+            ->warning()
+            ->title('Número de serie en uso')
+            ->body("Ya existe un equipo ACTIVO con este número de serie, asignado a «{$conflicto->nombre_usuario}». Puedes darlo de baja para reutilizar el número en este nuevo registro.")
+            ->persistent()
+            ->actions([
+                NotificationAction::make('dar_de_baja_equipo_computo_' . $conflicto->id)
+                    ->label('Dar de baja ese equipo')
+                    ->color('danger')
+                    ->button()
+                    ->action(function () use ($conflicto) {
+                        $conflicto->update([
+                            'tipo_movimiento' => 'baja',
+                            'fecha_baja' => now(),
+                        ]);
+
+                        Notification::make()
+                            ->title('Equipo anterior dado de baja')
+                            ->success()
+                            ->send();
+                    }),
+            ])
+            ->send();
     }
 }

@@ -19,11 +19,11 @@ class AltasBajasPorMesChart extends ChartWidget
         $labels = $meses->map(fn($m) => $m->translatedFormat('M Y'))->toArray();
 
         $altas = $meses->map(function ($mes) {
-            return EquipoComputo::whereMonth('created_at', $mes->month)
-                ->whereYear('created_at', $mes->year)
+            return EquipoComputo::whereMonth('fecha_entrega', $mes->month)
+                ->whereYear('fecha_entrega', $mes->year)
                 ->count()
-                + EquipoCelular::whereMonth('created_at', $mes->month)
-                ->whereYear('created_at', $mes->year)
+                + EquipoCelular::whereMonth('fecha_entrega', $mes->month)
+                ->whereYear('fecha_entrega', $mes->year)
                 ->count();
         })->toArray();
 

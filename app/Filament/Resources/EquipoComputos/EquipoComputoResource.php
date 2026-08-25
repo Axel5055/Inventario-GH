@@ -30,7 +30,7 @@ class EquipoComputoResource extends Resource
     protected static ?string $modelLabel = 'Equipo de Cómputo';
     protected static ?string $pluralModelLabel = 'Equipos de Cómputo';
     protected static string | UnitEnum | null $navigationGroup = 'Inventario';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 10;
 
     protected static ?string $recordTitleAttribute = 'nombre_usuario';
 

@@ -9,7 +9,6 @@ use App\Filament\Resources\EntregaDispositivos\Pages\ViewEntregaDispositivo;
 use App\Filament\Resources\EntregaDispositivos\Schemas\EntregaDispositivoForm;
 use App\Filament\Resources\EntregaDispositivos\Schemas\EntregaDispositivoInfolist;
 use App\Filament\Resources\EntregaDispositivos\Tables\EntregaDispositivosTable;
-use App\Filament\Traits\HasRoleAccess;
 use App\Models\EntregaDispositivo;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -31,7 +30,7 @@ class EntregaDispositivoResource extends Resource
     protected static ?string $modelLabel = 'Dispositivo Externo';
     protected static ?string $pluralModelLabel = 'Dispositivos Externos';
     protected static string | UnitEnum | null $navigationGroup = 'Inventario';
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 30;
 
     protected static ?string $recordTitleAttribute = 'nombre_usuario';
 

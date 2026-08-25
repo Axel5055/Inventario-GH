@@ -61,7 +61,7 @@ class EquipoComputoInfolist
                                             ->icon('heroicon-o-arrow-down-tray')
                                             ->color('success')
                                             ->visible(fn($record) => filled($record->responsiva_pdf))
-                                            ->action(fn($record) => response()->download(Storage::path($record->responsiva_pdf))),
+                                            ->action(fn($record) => response()->download(Storage::disk('local')->path($record->responsiva_pdf))),
                                     ])->alignEnd()->hiddenLabel(),
                                 ]),
 
@@ -374,14 +374,26 @@ class EquipoComputoInfolist
                             // Windows + Office en grid lado a lado
                             Grid::make(2)
                                 ->schema([
-                                    Section::make('Windows')
+                                    Section::make('Sistema Operativo')
                                         ->icon('heroicon-o-computer-desktop')
                                         ->columns(2)
                                         ->schema([
+                                            TextEntry::make('sistema_operativo')
+                                                ->label('Sistema Operativo')
+                                                ->badge()
+                                                ->color('primary')
+                                                ->formatStateUsing(fn($state) => match ($state) {
+                                                    'windows' => 'Windows',
+                                                    'apple'   => 'Apple (macOS)',
+                                                    default   => 'No registrado',
+                                                })
+                                                ->placeholder('No registrado'),
+
                                             TextEntry::make('windows_version')
                                                 ->label('Versión')
                                                 ->badge()
                                                 ->color('info')
+                                                ->visible(fn($record) => $record->sistema_operativo === 'windows')
                                                 ->placeholder('No registrado'),
 
                                             TextEntry::make('windows_key')
@@ -389,6 +401,7 @@ class EquipoComputoInfolist
                                                 ->icon('heroicon-o-key')
                                                 ->copyable()
                                                 ->copyMessage('¡Clave copiada!')
+                                                ->visible(fn($record) => $record->sistema_operativo === 'windows')
                                                 ->placeholder('No registrada'),
                                         ]),
 

@@ -36,29 +36,13 @@ class InventarioStatsWidget extends BaseWidget
                 ->description("$computosTotal registros totales")
                 ->descriptionIcon('heroicon-o-computer-desktop')
                 ->color('primary')
-                ->chart(
-                    EquipoComputo::selectRaw('COUNT(*) as count')
-                        ->whereNull('fecha_baja')
-                        ->whereMonth('created_at', '>=', now()->subMonths(5)->month)
-                        ->groupByRaw('MONTH(created_at)')
-                        ->orderByRaw('MONTH(created_at)')
-                        ->pluck('count')
-                        ->toArray()
-                ),
+                ->chart(self::ultimosSeisMeses(EquipoComputo::query()->whereNull('fecha_baja'))),
 
             Stat::make('Equipos Celulares Activos', $celularesActivos)
                 ->description("$celularesTotal registros totales")
                 ->descriptionIcon('heroicon-o-device-phone-mobile')
                 ->color('success')
-                ->chart(
-                    EquipoCelular::selectRaw('COUNT(*) as count')
-                        ->whereNull('fecha_baja')
-                        ->whereMonth('created_at', '>=', now()->subMonths(5)->month)
-                        ->groupByRaw('MONTH(created_at)')
-                        ->orderByRaw('MONTH(created_at)')
-                        ->pluck('count')
-                        ->toArray()
-                ),
+                ->chart(self::ultimosSeisMeses(EquipoCelular::query()->whereNull('fecha_baja'))),
 
             Stat::make('Entregas de Dispositivos', $entregasTotal)
                 ->description("$entregasMes entregas este mes")
@@ -70,5 +54,23 @@ class InventarioStatsWidget extends BaseWidget
                 ->descriptionIcon('heroicon-o-arrow-trending-down')
                 ->color($bajasMes > 0 ? 'danger' : 'gray'),
         ];
+    }
+
+    /**
+     * Cuenta de registros por mes de los últimos 6 meses (rango real de
+     * fechas, no solo el número de mes) para alimentar el mini-gráfico.
+     */
+    private static function ultimosSeisMeses($query): array
+    {
+        return collect(range(5, 0))
+            ->map(function (int $mesesAtras) use ($query) {
+                $mes = now()->subMonths($mesesAtras);
+
+                return (clone $query)
+                    ->whereMonth('created_at', $mes->month)
+                    ->whereYear('created_at', $mes->year)
+                    ->count();
+            })
+            ->toArray();
     }
 }
