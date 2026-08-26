@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraActividad;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EquipoComputo extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, RegistraActividad;
 
     protected $table = 'equipos_computo';
 
@@ -83,5 +84,20 @@ class EquipoComputo extends Model
     {
         return $this->hasMany(EquipoComputo::class, 'usuario_referencia', 'usuario_referencia')
             ->orderByDesc('fecha_entrega');
+    }
+
+    public function activityLogName(): string
+    {
+        return $this->nombre_usuario;
+    }
+
+    public function activityLogTipo(): string
+    {
+        return 'un equipo de cómputo';
+    }
+
+    public function activityLogCampos(): array
+    {
+        return ['nombre_usuario', 'tipo_movimiento', 'tipo_equipo', 'numero_serie', 'sucursal_id'];
     }
 }

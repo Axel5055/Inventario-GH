@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraActividad;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Marca extends Model
 {
+    use RegistraActividad;
+
     protected $table = 'marcas';
 
     protected $fillable = [
@@ -44,5 +47,20 @@ class Marca extends Model
     public function equiposCelulares(): HasMany
     {
         return $this->hasMany(EquipoCelular::class);
+    }
+
+    public function activityLogName(): string
+    {
+        return $this->nombre;
+    }
+
+    public function activityLogTipo(): string
+    {
+        return 'la marca';
+    }
+
+    public function activityLogCampos(): array
+    {
+        return ['nombre', 'categoria', 'activo'];
     }
 }

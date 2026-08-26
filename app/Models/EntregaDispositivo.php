@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraActividad;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EntregaDispositivo extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, RegistraActividad;
 
     protected $table = 'entregas_dispositivos';
 
@@ -48,5 +49,20 @@ class EntregaDispositivo extends Model
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class);
+    }
+
+    public function activityLogName(): string
+    {
+        return $this->nombre_usuario;
+    }
+
+    public function activityLogTipo(): string
+    {
+        return 'un dispositivo externo';
+    }
+
+    public function activityLogCampos(): array
+    {
+        return ['nombre_usuario', 'tipo_movimiento', 'tipo_dispositivo', 'descripcion', 'sucursal_id'];
     }
 }

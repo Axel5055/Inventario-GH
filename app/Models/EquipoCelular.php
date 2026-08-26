@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraActividad;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EquipoCelular extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, RegistraActividad;
 
     protected $table = 'equipos_celulares';
 
@@ -56,5 +57,20 @@ class EquipoCelular extends Model
     public function marca(): BelongsTo
     {
         return $this->belongsTo(Marca::class);
+    }
+
+    public function activityLogName(): string
+    {
+        return $this->nombre_usuario;
+    }
+
+    public function activityLogTipo(): string
+    {
+        return 'un equipo celular';
+    }
+
+    public function activityLogCampos(): array
+    {
+        return ['nombre_usuario', 'tipo_movimiento', 'tipo_equipo', 'modelo', 'sucursal_id'];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Concerns\RegistraActividad;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,7 +13,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasRoles;
+    use HasFactory, Notifiable, HasRoles, RegistraActividad;
 
     /**
      * The attributes that are mass assignable.
@@ -46,5 +47,20 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function activityLogName(): string
+    {
+        return $this->name;
+    }
+
+    public function activityLogTipo(): string
+    {
+        return 'el usuario';
+    }
+
+    public function activityLogCampos(): array
+    {
+        return ['name', 'email'];
     }
 }
