@@ -78,8 +78,6 @@ class EquipoComputoForm
                                                 ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
                                                 ->required()
                                                 ->native(false)
-                                                ->live()
-                                                ->afterStateUpdated(fn($set) => $set('sucursal_id', null))
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('rfc')->required(),
@@ -120,27 +118,14 @@ class EquipoComputoForm
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(
-                                                    fn($get) => Sucursal::where('activo', true)
-                                                        ->when(
-                                                            $get('razon_social_id'),
-                                                            fn($query, $razonSocialId) => $query->where('razon_social_id', $razonSocialId)
-                                                        )
-                                                        ->pluck('nombre', 'id')
-                                                )
+                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
                                                 ->required()
                                                 ->native(false)
-                                                ->live()
-                                                ->disabled(fn($get) => blank($get('razon_social_id')))
-                                                ->helperText('Selecciona primero una Razón Social.')
+                                                ->searchable()
                                                 ->createOptionForm([
-                                                    Hidden::make('razon_social_id'),
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
-                                                ])
-                                                ->createOptionAction(
-                                                    fn($action, $get) => $action->fillForm(['razon_social_id' => $get('razon_social_id')])
-                                                ),
+                                                ]),
 
                                             Select::make('area_id')
                                                 ->label('Área')

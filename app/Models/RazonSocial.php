@@ -16,11 +16,6 @@ class RazonSocial extends Model
 
     protected $casts = ['activo' => 'boolean'];
 
-    public function sucursales(): HasMany
-    {
-        return $this->hasMany(Sucursal::class);
-    }
-
     public function equiposComputo(): HasMany
     {
         return $this->hasMany(EquipoComputo::class);

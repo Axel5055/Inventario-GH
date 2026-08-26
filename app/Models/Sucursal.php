@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Models\Concerns\RegistraActividad;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Sucursal extends Model
 {
@@ -12,14 +11,9 @@ class Sucursal extends Model
 
     protected $table = 'sucursales';
 
-    protected $fillable = ['razon_social_id', 'nombre', 'ciudad', 'activo'];
+    protected $fillable = ['nombre', 'ciudad', 'activo'];
 
     protected $casts = ['activo' => 'boolean'];
-
-    public function razonSocial(): BelongsTo
-    {
-        return $this->belongsTo(RazonSocial::class);
-    }
 
     public function activityLogName(): string
     {
@@ -33,6 +27,6 @@ class Sucursal extends Model
 
     public function activityLogCampos(): array
     {
-        return ['razon_social_id', 'nombre', 'ciudad', 'activo'];
+        return ['nombre', 'ciudad', 'activo'];
     }
 }

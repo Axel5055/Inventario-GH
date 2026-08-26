@@ -2,8 +2,6 @@
 
 namespace App\Filament\Resources\Sucursals\Schemas;
 
-use App\Models\RazonSocial;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
@@ -14,17 +12,10 @@ class SucursalForm
     {
         return $schema
             ->components([
-                Select::make('razon_social_id')
-                    ->label('Razón Social')
-                    ->relationship('razonSocial', 'nombre')
-                    ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
-                    ->required()
-                    ->native(false)
-                    ->searchable(),
-
                 TextInput::make('nombre')
                     ->label('Nombre de la Sucursal')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->maxLength(255),
 
                 TextInput::make('ciudad')

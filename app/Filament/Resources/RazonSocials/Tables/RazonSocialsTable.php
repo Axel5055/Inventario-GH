@@ -23,10 +23,6 @@ class RazonSocialsTable
                     ->copyable()
                     ->placeholder('—'),
 
-                TextColumn::make('sucursales_count')
-                    ->label('Sucursales')
-                    ->counts('sucursales'),
-
                 IconColumn::make('activo')
                     ->boolean()
                     ->sortable(),
