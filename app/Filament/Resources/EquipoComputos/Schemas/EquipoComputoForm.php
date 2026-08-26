@@ -7,7 +7,6 @@ use App\Models\EquipoComputo;
 use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
-use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -16,8 +15,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Actions\Action as NotificationAction;
-use Filament\Notifications\Notification;
+use Filament\Actions\Action;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -201,20 +199,7 @@ class EquipoComputoForm
                                                 ->label('Número de Serie')
                                                 ->required()
                                                 ->maxLength(200)
-                                                ->helperText('El mismo número se puede reutilizar si el equipo anterior con ese número ya está de baja (equipo reciclado a otra persona).')
-                                                ->live(onBlur: true)
-                                                ->afterStateUpdated(function ($state, ?EquipoComputo $record) {
-                                                    self::avisarSiNumeroSerieActivo($state, $record);
-                                                })
-                                                ->rules([
-                                                    fn(?EquipoComputo $record): Closure => function (string $attribute, $value, Closure $fail) use ($record) {
-                                                        $conflicto = self::buscarConflictoNumeroSerie($value, $record);
-
-                                                        if ($conflicto) {
-                                                            $fail("Ya existe un equipo ACTIVO con este número de serie, asignado a «{$conflicto->nombre_usuario}». Debes darlo de baja antes de reutilizarlo.");
-                                                        }
-                                                    },
-                                                ]),
+                                                ->helperText('Si ya existe un equipo activo con este número, al guardar se te preguntará si deseas darlo de baja para reutilizarlo.'),
 
                                             TextInput::make('procesador')
                                                 ->label('Procesador')
@@ -434,7 +419,7 @@ class EquipoComputoForm
      * (equipo reciclado a otra persona), pero solo uno puede estar activo
      * (tipo_movimiento distinto de 'baja') a la vez.
      */
-    private static function buscarConflictoNumeroSerie(?string $numeroSerie, ?EquipoComputo $record): ?EquipoComputo
+    public static function buscarConflictoNumeroSerie(?string $numeroSerie, ?EquipoComputo $record): ?EquipoComputo
     {
         if (blank($numeroSerie)) {
             return null;
@@ -447,36 +432,39 @@ class EquipoComputoForm
             ->first();
     }
 
-    private static function avisarSiNumeroSerieActivo(?string $numeroSerie, ?EquipoComputo $record): void
+    /**
+     * Acción oculta (sin botón visible) registrada en las páginas de Crear
+     * y Editar. Se monta programáticamente al intentar guardar, cuando se
+     * detecta un número de serie duplicado en un registro activo. Si el
+     * usuario confirma, da de baja el registro anterior y reintenta guardar
+     * el actual; si cancela, el nuevo registro no se guarda.
+     */
+    public static function confirmarBajaSerieDuplicadaAction(): Action
     {
-        $conflicto = self::buscarConflictoNumeroSerie($numeroSerie, $record);
+        return Action::make('confirmarBajaSerieDuplicada')
+            ->extraAttributes(['style' => 'display: none;'])
+            ->modalHeading('Número de serie en uso')
+            ->modalDescription(fn(array $arguments): string => $arguments['mensaje'] ?? '')
+            ->modalIcon('heroicon-o-exclamation-triangle')
+            ->modalIconColor('danger')
+            ->modalSubmitActionLabel('Sí, dar de baja y guardar')
+            ->modalCancelActionLabel('No, cancelar')
+            ->color('danger')
+            ->action(function (array $arguments, $livewire) {
+                $conflicto = EquipoComputo::find($arguments['conflictoId'] ?? null);
 
-        if (! $conflicto) {
-            return;
-        }
+                if ($conflicto) {
+                    $conflicto->update([
+                        'tipo_movimiento' => 'baja',
+                        'fecha_baja' => now(),
+                    ]);
+                }
 
-        Notification::make()
-            ->warning()
-            ->title('Número de serie en uso')
-            ->body("Ya existe un equipo ACTIVO con este número de serie, asignado a «{$conflicto->nombre_usuario}». Puedes darlo de baja para reutilizar el número en este nuevo registro.")
-            ->persistent()
-            ->actions([
-                NotificationAction::make('dar_de_baja_equipo_computo_' . $conflicto->id)
-                    ->label('Dar de baja ese equipo')
-                    ->color('danger')
-                    ->button()
-                    ->action(function () use ($conflicto) {
-                        $conflicto->update([
-                            'tipo_movimiento' => 'baja',
-                            'fecha_baja' => now(),
-                        ]);
-
-                        Notification::make()
-                            ->title('Equipo anterior dado de baja')
-                            ->success()
-                            ->send();
-                    }),
-            ])
-            ->send();
+                if (method_exists($livewire, 'create')) {
+                    $livewire->create($arguments['another'] ?? false);
+                } elseif (method_exists($livewire, 'save')) {
+                    $livewire->save();
+                }
+            });
     }
 }

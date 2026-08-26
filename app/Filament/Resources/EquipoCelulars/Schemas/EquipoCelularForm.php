@@ -7,7 +7,6 @@ use App\Models\EquipoCelular;
 use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
-use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -16,8 +15,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Actions\Action as NotificationAction;
-use Filament\Notifications\Notification;
+use Filament\Actions\Action;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -198,20 +196,7 @@ class EquipoCelularForm
                                                 ->label('IMEI')
                                                 ->maxLength(20)
                                                 ->placeholder('15 dígitos')
-                                                ->helperText('El mismo IMEI se puede reutilizar si el equipo anterior con ese IMEI ya está de baja (equipo reciclado a otra persona).')
-                                                ->live(onBlur: true)
-                                                ->afterStateUpdated(function ($state, ?EquipoCelular $record) {
-                                                    self::avisarSiImeiActivo($state, $record);
-                                                })
-                                                ->rules([
-                                                    fn(?EquipoCelular $record): Closure => function (string $attribute, $value, Closure $fail) use ($record) {
-                                                        $conflicto = self::buscarConflictoImei($value, $record);
-
-                                                        if ($conflicto) {
-                                                            $fail("Ya existe un equipo ACTIVO con este IMEI, asignado a «{$conflicto->nombre_usuario}». Debes darlo de baja antes de reutilizarlo.");
-                                                        }
-                                                    },
-                                                ]),
+                                                ->helperText('Si ya existe un equipo activo con este IMEI, al guardar se te preguntará si deseas darlo de baja para reutilizarlo.'),
 
                                             TextInput::make('iccid')
                                                 ->label('ICCID (SIM)')
@@ -255,7 +240,7 @@ class EquipoCelularForm
      * reciclado a otra persona), pero solo uno puede estar activo
      * (tipo_movimiento distinto de 'baja') a la vez.
      */
-    private static function buscarConflictoImei(?string $imei, ?EquipoCelular $record): ?EquipoCelular
+    public static function buscarConflictoImei(?string $imei, ?EquipoCelular $record): ?EquipoCelular
     {
         if (blank($imei)) {
             return null;
@@ -268,36 +253,39 @@ class EquipoCelularForm
             ->first();
     }
 
-    private static function avisarSiImeiActivo(?string $imei, ?EquipoCelular $record): void
+    /**
+     * Acción oculta (sin botón visible) registrada en las páginas de Crear
+     * y Editar. Se monta programáticamente al intentar guardar, cuando se
+     * detecta un IMEI duplicado en un registro activo. Si el usuario
+     * confirma, da de baja el registro anterior y reintenta guardar el
+     * actual; si cancela, el nuevo registro no se guarda.
+     */
+    public static function confirmarBajaImeiDuplicadoAction(): Action
     {
-        $conflicto = self::buscarConflictoImei($imei, $record);
+        return Action::make('confirmarBajaImeiDuplicado')
+            ->extraAttributes(['style' => 'display: none;'])
+            ->modalHeading('IMEI en uso')
+            ->modalDescription(fn(array $arguments): string => $arguments['mensaje'] ?? '')
+            ->modalIcon('heroicon-o-exclamation-triangle')
+            ->modalIconColor('danger')
+            ->modalSubmitActionLabel('Sí, dar de baja y guardar')
+            ->modalCancelActionLabel('No, cancelar')
+            ->color('danger')
+            ->action(function (array $arguments, $livewire) {
+                $conflicto = EquipoCelular::find($arguments['conflictoId'] ?? null);
 
-        if (! $conflicto) {
-            return;
-        }
+                if ($conflicto) {
+                    $conflicto->update([
+                        'tipo_movimiento' => 'baja',
+                        'fecha_baja' => now(),
+                    ]);
+                }
 
-        Notification::make()
-            ->warning()
-            ->title('IMEI en uso')
-            ->body("Ya existe un equipo ACTIVO con este IMEI, asignado a «{$conflicto->nombre_usuario}». Puedes darlo de baja para reutilizarlo en este nuevo registro.")
-            ->persistent()
-            ->actions([
-                NotificationAction::make('dar_de_baja_equipo_celular_' . $conflicto->id)
-                    ->label('Dar de baja ese equipo')
-                    ->color('danger')
-                    ->button()
-                    ->action(function () use ($conflicto) {
-                        $conflicto->update([
-                            'tipo_movimiento' => 'baja',
-                            'fecha_baja' => now(),
-                        ]);
-
-                        Notification::make()
-                            ->title('Equipo anterior dado de baja')
-                            ->success()
-                            ->send();
-                    }),
-            ])
-            ->send();
+                if (method_exists($livewire, 'create')) {
+                    $livewire->create($arguments['another'] ?? false);
+                } elseif (method_exists($livewire, 'save')) {
+                    $livewire->save();
+                }
+            });
     }
 }
