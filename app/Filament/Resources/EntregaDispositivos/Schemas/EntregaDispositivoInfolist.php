@@ -40,7 +40,10 @@ class EntregaDispositivoInfolist
                                             ->icon('heroicon-o-arrow-down-tray')
                                             ->color('success')
                                             ->visible(fn($record) => filled($record->responsiva_pdf))
-                                            ->action(fn($record) => response()->download(Storage::disk('local')->path($record->responsiva_pdf))),
+                                            ->action(fn($record) => response()->download(
+                                                Storage::disk('local')->path($record->responsiva_pdf),
+                                                preg_replace('/[\/\\\\:*?"<>|]/', '', $record->nombre_usuario) . '.pdf'
+                                            )),
                                     ])->alignEnd()->hiddenLabel(),
                                 ]),
 

@@ -61,7 +61,17 @@ class EquipoComputoInfolist
                                             ->icon('heroicon-o-arrow-down-tray')
                                             ->color('success')
                                             ->visible(fn($record) => filled($record->responsiva_pdf))
-                                            ->action(fn($record) => response()->download(Storage::disk('local')->path($record->responsiva_pdf))),
+                                            ->action(fn($record) => response()->download(
+                                                Storage::disk('local')->path($record->responsiva_pdf),
+                                                preg_replace('/[\/\\\\:*?"<>|]/', '', $record->nombre_usuario) . '.pdf'
+                                            )),
+
+                                        Action::make('descargar_reporte_txt')
+                                            ->label('Descargar Reporte del Equipo')
+                                            ->icon('heroicon-o-document-arrow-down')
+                                            ->color('gray')
+                                            ->visible(fn($record) => filled($record->archivo_info_txt))
+                                            ->action(fn($record) => response()->download(Storage::disk('local')->path($record->archivo_info_txt))),
                                     ])->alignEnd()->hiddenLabel(),
                                 ]),
 

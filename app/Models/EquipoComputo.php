@@ -26,6 +26,7 @@ class EquipoComputo extends Model
         'ext',
         'tipo_equipo',
         'marca_id',
+        'marca_detectada',
         'modelo',
         'numero_serie',
         'procesador',
@@ -35,6 +36,7 @@ class EquipoComputo extends Model
         'usuario_equipo',
         'pin_password',
         'responsiva_pdf',
+        'archivo_info_txt',
         'sistema_operativo',
         'windows_version',
         'windows_key',
@@ -49,6 +51,8 @@ class EquipoComputo extends Model
         'outlook_correo_recuperacion',
         'bitlocker_key',
         'usuario_referencia',
+        'origen_registro',
+        'estado_revision',
     ];
 
     protected $casts = [

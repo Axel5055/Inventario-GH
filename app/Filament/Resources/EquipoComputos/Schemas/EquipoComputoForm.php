@@ -22,6 +22,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 
 class EquipoComputoForm
 {
@@ -176,6 +177,9 @@ class EquipoComputoForm
                                                 ->required()
                                                 ->native(false)
                                                 ->searchable()
+                                                ->helperText(fn($record) => $record?->marca_detectada
+                                                    ? "Detectado automáticamente: «{$record->marca_detectada}»"
+                                                    : null)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')
                                                         ->label('Nombre de la Marca')
@@ -250,6 +254,9 @@ class EquipoComputoForm
                                                         ->directory('responsivas/computo')
                                                         ->disk('local')
                                                         ->maxSize(10240)
+                                                        ->getUploadedFileNameForStorageUsing(
+                                                            fn($get) => Str::slug($get('nombre_usuario') ?: 'equipo') . '-' . Str::random(6) . '.pdf'
+                                                        )
                                                         ->downloadable()
                                                         ->openable(),
                                                 ]),

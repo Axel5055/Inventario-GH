@@ -17,6 +17,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 
 class EquipoComputosTable
 {
@@ -24,6 +25,13 @@ class EquipoComputosTable
     {
         return $table
             ->columns([
+                TextColumn::make('estado_revision')
+                    ->label('Revisión')
+                    ->badge()
+                    ->color(fn($state) => $state === 'pendiente' ? 'warning' : 'success')
+                    ->formatStateUsing(fn($state) => $state === 'pendiente' ? '🟡 Pendiente' : '✅ Completo')
+                    ->toggleable(),
+
                 TextColumn::make('tipo_movimiento')
                     ->label('Status')
                     ->badge()
@@ -92,6 +100,13 @@ class EquipoComputosTable
                     ->copyable(),
             ])
             ->filters([
+                SelectFilter::make('estado_revision')
+                    ->label('Revisión')
+                    ->options([
+                        'pendiente' => '🟡 Pendiente',
+                        'completo'  => '✅ Completo',
+                    ]),
+
                 SelectFilter::make('tipo_movimiento')
                     ->label('Tipo de Movimiento')
                     ->options([
@@ -110,6 +125,13 @@ class EquipoComputosTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+
+                Action::make('descargar_reporte_txt')
+                    ->label('Descargar Reporte')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('gray')
+                    ->visible(fn($record) => filled($record->archivo_info_txt))
+                    ->action(fn($record) => response()->download(Storage::disk('local')->path($record->archivo_info_txt))),
 
                 Action::make('dar_de_baja')
                     ->label('Dar de Baja')

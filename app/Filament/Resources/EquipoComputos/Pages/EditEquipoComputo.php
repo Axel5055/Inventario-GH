@@ -55,6 +55,11 @@ class EditEquipoComputo extends EditRecord
             $data['fecha_baja'] = null;
         }
 
+        // Guardar desde el panel de administración significa que el
+        // personal ya revisó y completó el registro (incluyendo los que
+        // llegaron pendientes desde el formulario público).
+        $data['estado_revision'] = 'completo';
+
         return $data;
     }
 }

@@ -21,6 +21,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 
 class EquipoCelularForm
 {
@@ -226,6 +227,9 @@ class EquipoCelularForm
                                                 ->directory('responsivas/celulares')
                                                 ->disk('local')
                                                 ->maxSize(10240)
+                                                ->getUploadedFileNameForStorageUsing(
+                                                    fn($get) => Str::slug($get('nombre_usuario') ?: 'equipo') . '-' . Str::random(6) . '.pdf'
+                                                )
                                                 ->downloadable()
                                                 ->openable(),
                                         ]),
