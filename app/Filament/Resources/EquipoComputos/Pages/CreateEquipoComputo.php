@@ -2,7 +2,10 @@
 
 namespace App\Filament\Resources\EquipoComputos\Pages;
 
+use App\Filament\Actions\CargarDesdePdfAction;
+use App\Filament\Actions\CargarInfoEquipoAction;
 use App\Filament\Resources\EquipoComputos\EquipoComputoResource;
+use App\Services\ExtractorResponsivaPdf;
 use App\Filament\Resources\EquipoComputos\Schemas\EquipoComputoForm;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -13,6 +16,8 @@ class CreateEquipoComputo extends CreateRecord
     protected function getHeaderActions(): array
     {
         return [
+            CargarDesdePdfAction::make(ExtractorResponsivaPdf::TIPO_COMPUTO),
+            CargarInfoEquipoAction::make(),
             EquipoComputoForm::confirmarBajaSerieDuplicadaAction(),
         ];
     }

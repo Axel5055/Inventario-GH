@@ -170,6 +170,10 @@ class EquipoComputoForm
                                                 ->required()
                                                 ->native(false),
 
+                                            // Los llena el botón "Cargar info de equipo" (.txt de InfoEquipo.cmd).
+                                            Hidden::make('marca_detectada'),
+                                            Hidden::make('archivo_info_txt'),
+
                                             Select::make('marca_id')
                                                 ->label('Marca')
                                                 ->relationship('marca', 'nombre')

@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\EquipoCelulars\Pages;
 
+use App\Filament\Actions\CargarDesdePdfAction;
 use App\Filament\Resources\EquipoCelulars\EquipoCelularResource;
+use App\Services\ExtractorResponsivaPdf;
 use App\Filament\Resources\EquipoCelulars\Schemas\EquipoCelularForm;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -13,6 +15,7 @@ class CreateEquipoCelular extends CreateRecord
     protected function getHeaderActions(): array
     {
         return [
+            CargarDesdePdfAction::make(ExtractorResponsivaPdf::TIPO_CELULAR),
             EquipoCelularForm::confirmarBajaImeiDuplicadoAction(),
         ];
     }

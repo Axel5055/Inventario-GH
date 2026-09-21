@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\EquipoComputos\Pages;
 
+use App\Filament\Actions\CargarInfoEquipoAction;
 use App\Filament\Resources\EquipoComputos\EquipoComputoResource;
 use App\Filament\Resources\EquipoComputos\Schemas\EquipoComputoForm;
 use App\Models\EquipoComputo;
@@ -18,6 +19,7 @@ class EditEquipoComputo extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            CargarInfoEquipoAction::make(),
             ViewAction::make(),
             DeleteAction::make(),
             ForceDeleteAction::make(),

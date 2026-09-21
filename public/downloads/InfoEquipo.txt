@@ -1,0 +1,19 @@
+﻿===== INFORMACION DEL EQUIPO =====
+Fecha: 09/21/2026 13:05:42
+
+Usuario:           Hugo
+Sist. Operativo:   Microsoft Windows 11 Home Single Language (Version 10.0.26200)
+Marca:             LENOVO
+Modelo:            82KU
+Numero de Serie:   PF4MZ0ZT
+Procesador:        AMD Ryzen 7 5700U with Radeon Graphics         
+Memoria RAM Total: 16 GB
+
+===== LICENCIAS =====
+Windows Key (OEM):        F7BFB-WNKMF-G2B66-GFGHM-FGDPM
+Office Key (ult. 5 car.): No detectado (sin Office con clave local instalado)
+
+===== DISCO(S) DURO(S) - CAPACIDAD TOTAL =====
+  - Acer SSD FA100 1TB | Capacidad total: 953.86 GB
+  - Generic MassStorageClass USB Device | Capacidad total: 0 GB
+  - Generic MassStorageClass USB Device | Capacidad total: 0 GB
