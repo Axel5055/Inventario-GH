@@ -15,6 +15,7 @@ class SuscripcionOffice365 extends Model
         'nombre',
         'correo',
         'contrasena',
+        'clave_licencia',
         'fecha_compra',
         'fecha_fin',
     ];
@@ -45,6 +46,6 @@ class SuscripcionOffice365 extends Model
 
     public function activityLogCampos(): array
     {
-        return ['nombre', 'correo', 'fecha_compra', 'fecha_fin'];
+        return ['nombre', 'correo', 'fecha_compra', 'fecha_fin']; // 'contrasena' y 'clave_licencia' nunca se registran en la bitácora.
     }
 }

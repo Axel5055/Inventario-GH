@@ -22,6 +22,12 @@ class SuscripcionOffice365sTable
                     ->copyable()
                     ->copyMessage('¡Correo copiado!'),
 
+                TextColumn::make('clave_licencia')
+                    ->label('Key')
+                    ->copyable()
+                    ->copyMessage('¡Key copiada!')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('fecha_compra')
                     ->label('Fecha de Compra')
                     ->date('d/m/Y')

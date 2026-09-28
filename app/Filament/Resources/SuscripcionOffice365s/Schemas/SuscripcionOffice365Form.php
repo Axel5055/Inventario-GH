@@ -30,6 +30,12 @@ class SuscripcionOffice365Form
                     ->required()
                     ->maxLength(255),
 
+                TextInput::make('clave_licencia')
+                    ->label('Key de Office 365')
+                    ->password()
+                    ->revealable()
+                    ->maxLength(255),
+
                 DatePicker::make('fecha_compra')
                     ->label('Fecha de Compra')
                     ->required()
