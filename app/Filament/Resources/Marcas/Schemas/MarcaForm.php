@@ -25,9 +25,12 @@ class MarcaForm
                         'ambas'   => 'Ambas',
                         'computo' => 'Equipo de Cómputo',
                         'celular' => 'Celular',
+                        'dispositivos' => 'Solo Dispositivos Externos',
+                        'pendiente' => 'Pendiente de definir (solo Dispositivos Externos)',
                     ])
                     ->required()
-                    ->native(false),
+                    ->native(false)
+                    ->helperText('Las marcas «Pendiente» las agregó el personal desde Dispositivos Externos: elige si también aplican a cómputo, celular o ambas. Si no aplica a ninguna, elige «Solo Dispositivos Externos».'),
 
                 Toggle::make('activo')
                     ->label('Activa')

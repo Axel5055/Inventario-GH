@@ -25,8 +25,11 @@ class MarcasTable
                         'ambas'   => 'Ambas',
                         'computo' => 'Equipo de Cómputo',
                         'celular' => 'Celular',
+                        'dispositivos' => 'Solo Dispositivos Externos',
+                        'pendiente' => 'Pendiente de definir',
                         default   => ucfirst($state),
-                    }),
+                    })
+                    ->color(fn($state) => $state === 'pendiente' ? 'warning' : 'gray'),
 
                 IconColumn::make('activo')
                     ->boolean()
@@ -46,6 +49,8 @@ class MarcasTable
                         'ambas'   => 'Ambas',
                         'computo' => 'Equipo de Cómputo',
                         'celular' => 'Celular',
+                        'dispositivos' => 'Solo Dispositivos Externos',
+                        'pendiente' => 'Pendiente de definir',
                     ]),
 
                 TernaryFilter::make('activo'),

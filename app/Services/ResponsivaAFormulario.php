@@ -113,13 +113,14 @@ class ResponsivaAFormulario
         $datos['curp'] = ($c = $this->limpio($d['curp'] ?? null, 20)) ? Str::upper($c) : null;
 
         // "Puesto / Área" viene en un solo campo: si coincide con un área se usa
-        // como área, si no se guarda como puesto.
+        // como área; si no, como el formulario ya no tiene puesto, se anota en observaciones.
         $puestoArea = $this->limpio($d['puesto_area'] ?? null);
         $areaId = $puestoArea ? $this->buscarId(Area::where('activo', true)->pluck('nombre', 'id'), $puestoArea) : null;
+        $notaPuesto = null;
         if ($areaId) {
             $datos['area_id'] = $areaId;
-        } else {
-            $datos['puesto'] = $puestoArea;
+        } elseif ($puestoArea) {
+            $notaPuesto = "Puesto / Área: {$puestoArea}";
         }
 
         $datos['sucursal_id'] = $this->catalogo(
@@ -136,7 +137,8 @@ class ResponsivaAFormulario
         $datos['modelo'] = $this->limpio($d['modelo'] ?? null);
         $datos['imei'] = $this->limpio($d['imei'] ?? null, 20);
         $datos['iccid'] = $this->limpio($d['iccid'] ?? null, 22);
-        $datos['observaciones'] = $this->limpio($d['observaciones'] ?? null);
+        $notas = array_filter([$this->limpio($d['observaciones'] ?? null), $notaPuesto]);
+        $datos['observaciones'] = $notas ? implode("\n", $notas) : null;
 
         if ($datos['nombre_usuario']) {
             $datos['usuario_referencia'] = Str::lower(str_replace(' ', '.', $datos['nombre_usuario']));

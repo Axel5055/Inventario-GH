@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\EquipoCelulars\Tables;
 
+use App\Support\OpcionesOrdenadas;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -95,14 +96,14 @@ class EquipoCelularsTable
             ->filters([
                 SelectFilter::make('tipo_movimiento')
                     ->label('Tipo de Movimiento')
-                    ->options([
+                    ->options(OpcionesOrdenadas::alfabetico([
                         'alta'              => '🟢 Alta',
                         'baja'              => '🔴 Baja',
                         'cambio_equipo'     => '🔄 Cambio de Equipo',
                         'reasignacion'      => '🔁 Reasignación',
                         'mantenimiento'     => '🔧 Mantenimiento',
                         'prestamo_temporal' => '⏱ Préstamo Temporal',
-                    ]),
+                    ])),
 
                 SelectFilter::make('razon_social_id')
                     ->label('Razón Social')

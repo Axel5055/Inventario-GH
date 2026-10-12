@@ -29,6 +29,24 @@ class MarcaResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'nombre';
 
+    // Avisa a los administradores cuántas marcas agregadas desde Dispositivos Externos esperan clasificación.
+    public static function getNavigationBadge(): ?string
+    {
+        $pendientes = Marca::where('categoria', 'pendiente')->count();
+
+        return $pendientes > 0 ? (string) $pendientes : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Marcas pendientes de definir categoría';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return MarcaForm::configure($schema);

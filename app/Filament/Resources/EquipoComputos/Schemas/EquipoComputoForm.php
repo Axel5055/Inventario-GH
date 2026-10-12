@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\EquipoComputos\Schemas;
 
+use App\Support\AltaRapidaCatalogo;
+use App\Support\OpcionesOrdenadas;
 use App\Models\Area;
 use App\Models\EquipoComputo;
 use App\Models\Marca;
@@ -53,14 +55,14 @@ class EquipoComputoForm
 
                                             Select::make('tipo_movimiento')
                                                 ->label('Tipo de Movimiento')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'alta'              => '🟢 Alta',
                                                     'baja'              => '🔴 Baja',
                                                     'cambio_equipo'     => '🔄 Cambio de Equipo',
                                                     'reasignacion'      => '🔁 Reasignación',
                                                     'mantenimiento'     => '🔧 Mantenimiento',
                                                     'prestamo_temporal' => '⏱ Préstamo Temporal',
-                                                ])
+                                                ]))
                                                 ->required()
                                                 ->native(false),
 
@@ -74,13 +76,14 @@ class EquipoComputoForm
                                             Select::make('razon_social_id')
                                                 ->label('Razón Social')
                                                 ->relationship('razonSocial', 'nombre')
-                                                ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(RazonSocial::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('rfc')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\RazonSocial::class, $data, 'la razón social')),
                                         ]),
 
                                     // ── Columna derecha: datos del usuario ──
@@ -117,24 +120,26 @@ class EquipoComputoForm
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Sucursal::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->searchable()
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Sucursal::class, $data, 'la sucursal')),
 
                                             Select::make('area_id')
                                                 ->label('Área')
                                                 ->relationship('area', 'nombre')
-                                                ->options(Area::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Area::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Area::class, $data, 'el área')),
 
                                             Hidden::make('usuario_referencia'),
                                         ]),
@@ -160,13 +165,13 @@ class EquipoComputoForm
 
                                             Select::make('tipo_equipo')
                                                 ->label('Tipo de Equipo')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'laptop'      => 'Laptop',
                                                     'desktop'     => 'Desktop / PC',
                                                     'all_in_one'  => 'All in One',
                                                     'workstation' => 'Workstation',
                                                     'mini_pc'     => 'Mini PC',
-                                                ])
+                                                ]))
                                                 ->required()
                                                 ->native(false),
 
@@ -177,7 +182,7 @@ class EquipoComputoForm
                                             Select::make('marca_id')
                                                 ->label('Marca')
                                                 ->relationship('marca', 'nombre')
-                                                ->options(Marca::activas()->deComputo()->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Marca::activas()->deComputo()->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->searchable()
@@ -190,13 +195,14 @@ class EquipoComputoForm
                                                         ->required(),
                                                     Select::make('categoria')
                                                         ->label('¿La marca es para..?')
-                                                        ->options([
+                                                        ->options(OpcionesOrdenadas::alfabetico([
                                                             'ambas'   => 'Ambas',
                                                             'computo' => 'Equipo de Cómputo',
                                                             'celular' => 'Celular',
-                                                        ])
+                                                        ]))
                                                         ->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Marca::class, $data, 'la marca', 'computo')),
 
                                             TextInput::make('modelo')
                                                 ->label('Modelo')
@@ -285,10 +291,10 @@ class EquipoComputoForm
                                         ->schema([
                                             Select::make('sistema_operativo')
                                                 ->label('Sistema Operativo')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'windows' => 'Windows',
                                                     'apple'   => 'Apple (macOS)',
-                                                ])
+                                                ]))
                                                 ->required()
                                                 ->native(false)
                                                 ->live()
@@ -301,13 +307,13 @@ class EquipoComputoForm
 
                                             Select::make('windows_version')
                                                 ->label('Versión de Windows')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'Windows 10 Home'       => 'Windows 10 Home',
                                                     'Windows 10 Pro'        => 'Windows 10 Pro',
                                                     'Windows 11 Home'       => 'Windows 11 Home',
                                                     'Windows 11 Pro'        => 'Windows 11 Pro',
                                                     'Windows 11 Enterprise' => 'Windows 11 Enterprise',
-                                                ])
+                                                ]))
                                                 ->native(false)
                                                 ->visible(fn($get) => $get('sistema_operativo') === 'windows')
                                                 ->required(fn($get) => $get('sistema_operativo') === 'windows'),
@@ -327,12 +333,12 @@ class EquipoComputoForm
                                         ->schema([
                                             Select::make('antivirus_nombre')
                                                 ->label('Antivirus')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'Windows Defender' => 'Windows Defender',
                                                     'Avast'            => 'Avast',
                                                     'Norton'           => 'Norton',
                                                     'Malwarebytes'     => 'Malwarebytes',
-                                                ])
+                                                ]))
                                                 ->native(false),
 
                                             Grid::make(2)
@@ -355,13 +361,13 @@ class EquipoComputoForm
                                         ->schema([
                                             Select::make('office_version')
                                                 ->label('Versión de Office')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'Microsoft 365' => 'Microsoft 365',
                                                     'Office 2021'   => 'Office 2021',
                                                     'Office 2019'   => 'Office 2019',
                                                     'Office 2016'   => 'Office 2016',
                                                     'Sin Office'    => 'Sin Office',
-                                                ])
+                                                ]))
                                                 ->required()
                                                 ->native(false),
 

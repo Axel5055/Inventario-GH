@@ -116,11 +116,6 @@ class EntregaDispositivoInfolist
                                         ->icon('heroicon-o-rectangle-group')
                                         ->badge()
                                         ->color('gray'),
-
-                                    TextEntry::make('puesto')
-                                        ->label('Puesto')
-                                        ->icon('heroicon-o-briefcase')
-                                        ->placeholder('No especificado'),
                                 ]),
 
                             Section::make('Observaciones')

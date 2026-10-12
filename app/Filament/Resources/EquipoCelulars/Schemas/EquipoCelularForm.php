@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\EquipoCelulars\Schemas;
 
+use App\Support\AltaRapidaCatalogo;
+use App\Support\OpcionesOrdenadas;
 use App\Models\Area;
 use App\Models\EquipoCelular;
 use App\Models\Marca;
@@ -52,14 +54,14 @@ class EquipoCelularForm
 
                                             Select::make('tipo_movimiento')
                                                 ->label('Tipo de Movimiento')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'alta'              => '🟢 Alta',
                                                     'baja'              => '🔴 Baja',
                                                     'cambio_equipo'     => '🔄 Cambio de Equipo',
                                                     'reasignacion'      => '🔁 Reasignación',
                                                     'mantenimiento'     => '🔧 Mantenimiento',
                                                     'prestamo_temporal' => '⏱ Préstamo Temporal',
-                                                ])
+                                                ]))
                                                 ->default('alta')
                                                 ->required()
                                                 ->native(false),
@@ -73,13 +75,14 @@ class EquipoCelularForm
                                             Select::make('razon_social_id')
                                                 ->label('Razón Social')
                                                 ->relationship('razonSocial', 'nombre')
-                                                ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(RazonSocial::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('rfc')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\RazonSocial::class, $data, 'la razón social')),
                                         ]),
 
                                     // ── Columna derecha: datos del usuario ──
@@ -101,31 +104,29 @@ class EquipoCelularForm
                                                     }
                                                 }),
 
-                                            TextInput::make('puesto')
-                                                ->label('Puesto')
-                                                ->maxLength(255),
-
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Sucursal::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->searchable()
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Sucursal::class, $data, 'la sucursal')),
 
                                             Select::make('area_id')
                                                 ->label('Área')
                                                 ->relationship('area', 'nombre')
-                                                ->options(Area::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Area::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Area::class, $data, 'el área')),
 
                                             Hidden::make('usuario_referencia'),
                                         ]),
@@ -151,12 +152,12 @@ class EquipoCelularForm
 
                                             Select::make('tipo_equipo')
                                                 ->label('Tipo de Equipo')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'celular' => '📱 Celular',
                                                     'tablet'  => '📟 Tablet',
                                                     'ipad'    => '🍎 iPad',
                                                     'otro'    => '📦 Otro',
-                                                ])
+                                                ]))
                                                 ->required()
                                                 ->native(false),
 
@@ -164,7 +165,7 @@ class EquipoCelularForm
                                                 ->label('Marca')
                                                 ->relationship('marca', 'nombre')
                                                 ->options(
-                                                    Marca::activas()->deCelular()->pluck('nombre', 'id')
+                                                    OpcionesOrdenadas::alfabetico(Marca::activas()->deCelular()->pluck('nombre', 'id'))
                                                 )
                                                 ->required()
                                                 ->native(false)
@@ -175,13 +176,14 @@ class EquipoCelularForm
                                                         ->required(),
                                                     Select::make('categoria')
                                                         ->label('¿La marca es para..?')
-                                                        ->options([
+                                                        ->options(OpcionesOrdenadas::alfabetico([
                                                             'ambas'   => 'Ambas',
                                                             'computo' => 'Equipo de Cómputo',
                                                             'celular' => 'Celular',
-                                                        ])
+                                                        ]))
                                                         ->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Marca::class, $data, 'la marca', 'celular')),
 
                                             TextInput::make('modelo')
                                                 ->label('Modelo')

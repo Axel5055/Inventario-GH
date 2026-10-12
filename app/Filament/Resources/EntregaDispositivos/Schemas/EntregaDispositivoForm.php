@@ -2,7 +2,10 @@
 
 namespace App\Filament\Resources\EntregaDispositivos\Schemas;
 
+use App\Support\AltaRapidaCatalogo;
+use App\Support\OpcionesOrdenadas;
 use App\Models\Area;
+use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
 use Filament\Forms\Components\DatePicker;
@@ -48,10 +51,10 @@ class EntregaDispositivoForm
 
                                             Select::make('tipo_movimiento')
                                                 ->label('Tipo de Movimiento')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'entrega'    => '📦 Entrega',
                                                     'devolucion' => '↩️ Devolución',
-                                                ])
+                                                ]))
                                                 ->default('entrega')
                                                 ->required()
                                                 ->native(false),
@@ -65,13 +68,14 @@ class EntregaDispositivoForm
                                             Select::make('razon_social_id')
                                                 ->label('Razón Social')
                                                 ->relationship('razonSocial', 'nombre')
-                                                ->options(RazonSocial::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(RazonSocial::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('rfc')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\RazonSocial::class, $data, 'la razón social')),
                                         ]),
 
                                     // ── Columna derecha: datos del usuario ──
@@ -99,31 +103,29 @@ class EntregaDispositivoForm
                                                 ->maxLength(255)
                                                 ->columnSpanFull(),
 
-                                            TextInput::make('puesto')
-                                                ->label('Puesto')
-                                                ->maxLength(255),
-
                                             Select::make('sucursal_id')
                                                 ->label('Sucursal')
                                                 ->relationship('sucursal', 'nombre')
-                                                ->options(Sucursal::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Sucursal::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->searchable()
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
                                                     TextInput::make('ciudad')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Sucursal::class, $data, 'la sucursal')),
 
                                             Select::make('area_id')
                                                 ->label('Área')
                                                 ->relationship('area', 'nombre')
-                                                ->options(Area::where('activo', true)->pluck('nombre', 'id'))
+                                                ->options(OpcionesOrdenadas::alfabetico(Area::where('activo', true)->pluck('nombre', 'id')))
                                                 ->required()
                                                 ->native(false)
                                                 ->createOptionForm([
                                                     TextInput::make('nombre')->required(),
-                                                ]),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(\App\Models\Area::class, $data, 'el área')),
 
                                             Hidden::make('usuario_referencia'),
                                         ]),
@@ -149,7 +151,7 @@ class EntregaDispositivoForm
 
                                             Select::make('tipo_dispositivo')
                                                 ->label('Tipo de Dispositivo')
-                                                ->options([
+                                                ->options(OpcionesOrdenadas::alfabetico([
                                                     'disco_duro' => '💾 Disco Duro',
                                                     'cable'      => '🔌 Cable',
                                                     'accesorio'  => '🧩 Accesorio',
@@ -157,7 +159,7 @@ class EntregaDispositivoForm
                                                     'mouse'      => '🖱️ Mouse',
                                                     'monitor'    => '🖥️ Monitor',
                                                     'otro'       => '📦 Otro',
-                                                ])
+                                                ]))
                                                 ->required()
                                                 ->native(false)
                                                 ->live(),
@@ -168,10 +170,31 @@ class EntregaDispositivoForm
                                                 ->maxLength(255)
                                                 ->placeholder('Ej: Disco duro externo 1TB, Cable HDMI 2m...'),
 
-                                            TextInput::make('marca')
+                                            // Todas las marcas del catálogo (sin filtrar por categoría). Se guarda el
+                                            // nombre, así que se conserva la marca de registros anteriores aunque ya
+                                            // no esté en el catálogo.
+                                            Select::make('marca')
                                                 ->label('Marca')
-                                                ->maxLength(100)
-                                                ->placeholder('Ej: Samsung, Logitech...'),
+                                                ->options(fn ($get) => OpcionesOrdenadas::alfabetico(
+                                                    Marca::activas()->pluck('nombre', 'nombre')
+                                                        ->when(filled($get('marca')), fn ($m) => $m->put($get('marca'), $get('marca')))
+                                                ))
+                                                ->native(false)
+                                                ->searchable()
+                                                ->placeholder('Selecciona o agrega una marca')
+                                                ->createOptionForm([
+                                                    TextInput::make('nombre')
+                                                        ->label('Nombre de la Marca')
+                                                        ->required()
+                                                        ->maxLength(100)
+                                                        ->helperText('Quedará como «pendiente»: un administrador definirá después si también aplica a equipos de cómputo o celulares.'),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(
+                                                    Marca::class,
+                                                    $data + ['categoria' => 'pendiente'],
+                                                    'la marca',
+                                                    llave: 'nombre',
+                                                )),
 
                                             TextInput::make('modelo')
                                                 ->label('Modelo')

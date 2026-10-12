@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\EntregaDispositivos\Tables;
 
+use App\Support\OpcionesOrdenadas;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -86,10 +87,10 @@ class EntregaDispositivosTable
             ->filters([
                 SelectFilter::make('tipo_movimiento')
                     ->label('Tipo de Movimiento')
-                    ->options([
+                    ->options(OpcionesOrdenadas::alfabetico([
                         'entrega'    => '📦 Entrega',
                         'devolucion' => '↩️ Devolución',
-                    ]),
+                    ])),
 
                 SelectFilter::make('razon_social_id')
                     ->label('Razón Social')
