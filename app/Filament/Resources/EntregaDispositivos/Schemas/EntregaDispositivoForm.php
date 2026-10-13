@@ -5,6 +5,7 @@ namespace App\Filament\Resources\EntregaDispositivos\Schemas;
 use App\Support\AltaRapidaCatalogo;
 use App\Support\OpcionesOrdenadas;
 use App\Models\Area;
+use App\Models\TipoDispositivo;
 use App\Models\Marca;
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
@@ -151,18 +152,27 @@ class EntregaDispositivoForm
 
                                             Select::make('tipo_dispositivo')
                                                 ->label('Tipo de Dispositivo')
-                                                ->options(OpcionesOrdenadas::alfabetico([
-                                                    'disco_duro' => '💾 Disco Duro',
-                                                    'cable'      => '🔌 Cable',
-                                                    'accesorio'  => '🧩 Accesorio',
-                                                    'teclado'    => '⌨️ Teclado',
-                                                    'mouse'      => '🖱️ Mouse',
-                                                    'monitor'    => '🖥️ Monitor',
-                                                    'otro'       => '📦 Otro',
-                                                ]))
+                                                // Catálogo editable: si el tipo no existe se agrega con el "+".
+                                                ->options(fn ($get) => OpcionesOrdenadas::alfabetico(
+                                                    TipoDispositivo::where('activo', true)->pluck('nombre', 'nombre')
+                                                        ->when(filled($get('tipo_dispositivo')), fn ($t) => $t->put($get('tipo_dispositivo'), $get('tipo_dispositivo')))
+                                                ))
                                                 ->required()
                                                 ->native(false)
-                                                ->live(),
+                                                ->searchable()
+                                                ->live()
+                                                ->createOptionForm([
+                                                    TextInput::make('nombre')
+                                                        ->label('Nombre del Tipo de Dispositivo')
+                                                        ->required()
+                                                        ->maxLength(100),
+                                                ])
+                                                ->createOptionUsing(fn (array $data) => AltaRapidaCatalogo::crear(
+                                                    TipoDispositivo::class,
+                                                    $data,
+                                                    'el tipo de dispositivo',
+                                                    llave: 'nombre',
+                                                )),
 
                                             TextInput::make('descripcion')
                                                 ->label('Descripción')

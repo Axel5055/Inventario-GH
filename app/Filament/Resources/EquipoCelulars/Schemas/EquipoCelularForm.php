@@ -23,6 +23,9 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class EquipoCelularForm
@@ -242,46 +245,111 @@ class EquipoCelularForm
     }
 
     /**
-     * Un mismo IMEI es válido en varios registros históricos (equipo
-     * reciclado a otra persona), pero solo uno puede estar activo
-     * (tipo_movimiento distinto de 'baja') a la vez.
+     * Registros ACTIVOS (tipo_movimiento distinto de 'baja') que chocan con el que
+     * se está guardando:
+     *
+     *  - Mismo número telefónico: la misma línea se está entregando en otro
+     *    equipo (el IMEI cambia porque es otro celular). Lo vigente es el
+     *    registro nuevo; el anterior pasa a baja.
+     *  - Mismo IMEI: el mismo equipo físico no puede estar activo dos veces.
+     *
+     * Si el registro que se guarda es una baja no hay nada que reemplazar. Al
+     * editar, el teléfono solo se revisa si cambió (o si el registro dejó de
+     * ser baja), para no dar de baja registros más recientes al corregir uno viejo.
+     *
+     * @param  array<string, mixed>  $data  estado del formulario
+     * @return Collection<int, array{registro: EquipoCelular, motivos: array<int, string>}>
      */
-    public static function buscarConflictoImei(?string $imei, ?EquipoCelular $record): ?EquipoCelular
+    public static function buscarConflictos(array $data, ?EquipoCelular $record): Collection
     {
-        if (blank($imei)) {
-            return null;
+        $conflictos = collect();
+
+        if (($data['tipo_movimiento'] ?? null) === 'baja') {
+            return $conflictos;
         }
 
-        return EquipoCelular::query()
-            ->where('imei', $imei)
+        $agregar = function (EquipoCelular $encontrado, string $motivo) use (&$conflictos) {
+            $actual = $conflictos->get($encontrado->id, ['registro' => $encontrado, 'motivos' => []]);
+            $actual['motivos'][] = $motivo;
+            $conflictos->put($encontrado->id, $actual);
+        };
+
+        $activos = fn () => EquipoCelular::query()
+            ->with('marca')
             ->where('tipo_movimiento', '!=', 'baja')
-            ->when($record, fn($query) => $query->whereKeyNot($record->getKey()))
-            ->first();
+            ->when($record, fn ($query) => $query->whereKeyNot($record->getKey()));
+
+        $telefono = self::soloDigitos($data['numero_telefonico'] ?? null);
+
+        $telefonoCambio = ! $record
+            || self::soloDigitos($record->numero_telefonico) !== $telefono
+            || $record->tipo_movimiento === 'baja';
+
+        if (strlen($telefono) >= 7 && $telefonoCambio) {
+            // Se comparan solo los dígitos (ignora espacios, guiones, paréntesis, +) y
+            // los últimos 10, para que "+52 55 1234 5678" y "5512345678" sean el mismo.
+            $expresion = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(numero_telefonico, ' ', ''), '-', ''), '(', ''), ')', ''), '+', ''), '.', '')";
+            $comparar = strlen($telefono) >= 10 ? "RIGHT({$expresion}, 10) = ?" : "{$expresion} = ?";
+            $valor = strlen($telefono) >= 10 ? substr($telefono, -10) : $telefono;
+
+            foreach ($activos()->whereRaw($comparar, [$valor])->get() as $encontrado) {
+                $agregar($encontrado, 'mismo número telefónico (' . $encontrado->numero_telefonico . ')');
+            }
+        }
+
+        $imei = trim((string) ($data['imei'] ?? ''));
+
+        if ($imei !== '') {
+            foreach ($activos()->where('imei', $imei)->get() as $encontrado) {
+                $agregar($encontrado, 'mismo IMEI (' . $encontrado->imei . ')');
+            }
+        }
+
+        return $conflictos;
+    }
+
+    private static function soloDigitos(?string $valor): string
+    {
+        return preg_replace('/\D/', '', (string) $valor);
     }
 
     /**
-     * Acción oculta (sin botón visible) registrada en las páginas de Crear
-     * y Editar. Se monta programáticamente al intentar guardar, cuando se
-     * detecta un IMEI duplicado en un registro activo. Si el usuario
-     * confirma, da de baja el registro anterior y reintenta guardar el
-     * actual; si cancela, el nuevo registro no se guarda.
+     * Acción oculta (sin botón visible) registrada en las páginas de Crear y
+     * Editar. Se monta programáticamente al guardar cuando hay registros
+     * activos en conflicto. Si el usuario confirma, esos registros pasan a
+     * baja y se reintenta guardar el actual (que queda como el vigente); si
+     * cancela, no se guarda nada. Los conflictos se vuelven a calcular al
+     * confirmar, no se confía en datos enviados desde el navegador.
      */
-    public static function confirmarBajaImeiDuplicadoAction(): Action
+    public static function confirmarBajaDuplicadoAction(): Action
     {
-        return Action::make('confirmarBajaImeiDuplicado')
+        return Action::make('confirmarBajaDuplicado')
             ->extraAttributes(['style' => 'display: none;'])
-            ->modalHeading('IMEI en uso')
-            ->modalDescription(fn(array $arguments): string => $arguments['mensaje'] ?? '')
+            ->modalHeading('Ya existe un registro activo')
+            ->modalDescription(function ($livewire): HtmlString {
+                $lineas = self::conflictosDe($livewire)->map(function (array $c) {
+                    /** @var EquipoCelular $r */
+                    $r = $c['registro'];
+                    $equipo = trim(($r->marca?->nombre ?? '') . ' ' . $r->modelo);
+
+                    return '<li><b>' . e($r->nombre_usuario) . '</b> — ' . e(implode(' y ', $c['motivos']))
+                        . ($equipo !== '' ? ' (' . e($equipo) . ')' : '') . '</li>';
+                })->implode('');
+
+                return new HtmlString(
+                    '<p>Estos registros siguen activos y coinciden con el que estás guardando:</p>'
+                    . '<ul style="list-style: disc; margin: .5rem 0 .5rem 1.25rem;">' . $lineas . '</ul>'
+                    . '<p>Si continúas, <b>pasarán a status Baja</b> y quedará vigente el registro que estás guardando.</p>'
+                );
+            })
             ->modalIcon('heroicon-o-exclamation-triangle')
             ->modalIconColor('danger')
-            ->modalSubmitActionLabel('Sí, dar de baja y guardar')
+            ->modalSubmitActionLabel('Sí, dar de baja el anterior y guardar')
             ->modalCancelActionLabel('No, cancelar')
             ->color('danger')
             ->action(function (array $arguments, $livewire) {
-                $conflicto = EquipoCelular::find($arguments['conflictoId'] ?? null);
-
-                if ($conflicto) {
-                    $conflicto->update([
+                foreach (self::conflictosDe($livewire) as $conflicto) {
+                    $conflicto['registro']->update([
                         'tipo_movimiento' => 'baja',
                         'fecha_baja' => now(),
                     ]);
@@ -293,5 +361,15 @@ class EquipoCelularForm
                     $livewire->save();
                 }
             });
+    }
+
+    /**
+     * @return Collection<int, array{registro: EquipoCelular, motivos: array<int, string>}>
+     */
+    public static function conflictosDe($livewire): Collection
+    {
+        $record = $livewire instanceof EditRecord ? $livewire->getRecord() : null;
+
+        return self::buscarConflictos($livewire->data ?? [], $record);
     }
 }

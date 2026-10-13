@@ -16,20 +16,14 @@ class CreateEquipoCelular extends CreateRecord
     {
         return [
             CargarDesdePdfAction::make(ExtractorResponsivaPdf::TIPO_CELULAR),
-            EquipoCelularForm::confirmarBajaImeiDuplicadoAction(),
+            EquipoCelularForm::confirmarBajaDuplicadoAction(),
         ];
     }
 
     public function create(bool $another = false): void
     {
-        $conflicto = EquipoCelularForm::buscarConflictoImei($this->data['imei'] ?? null, null);
-
-        if ($conflicto) {
-            $this->mountAction('confirmarBajaImeiDuplicado', [
-                'conflictoId' => $conflicto->id,
-                'mensaje' => "Ya existe un equipo ACTIVO con este IMEI, asignado a «{$conflicto->nombre_usuario}». ¿Deseas darlo de baja para reutilizarlo en este nuevo registro?",
-                'another' => $another,
-            ]);
+        if (EquipoCelularForm::conflictosDe($this)->isNotEmpty()) {
+            $this->mountAction('confirmarBajaDuplicado', ['another' => $another]);
 
             return;
         }
