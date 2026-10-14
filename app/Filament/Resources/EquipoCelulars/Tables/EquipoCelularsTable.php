@@ -4,6 +4,8 @@ namespace App\Filament\Resources\EquipoCelulars\Tables;
 
 use App\Support\OpcionesOrdenadas;
 use Filament\Actions\Action;
+use App\Filament\Actions\ExportarExcelAction;
+use App\Services\ReporteInventario;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -147,6 +149,7 @@ class EquipoCelularsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    ExportarExcelAction::enLote(ReporteInventario::CELULAR),
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),

@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\EntregaDispositivos\Tables;
 
 use App\Support\OpcionesOrdenadas;
+use App\Filament\Actions\ExportarExcelAction;
+use App\Services\ReporteInventario;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -104,6 +106,7 @@ class EntregaDispositivosTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    ExportarExcelAction::enLote(ReporteInventario::DISPOSITIVOS),
                     DeleteBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),

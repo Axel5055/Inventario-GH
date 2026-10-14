@@ -4,6 +4,8 @@ namespace App\Filament\Resources\EquipoComputos\Tables;
 
 use App\Support\OpcionesOrdenadas;
 use Filament\Actions\Action;
+use App\Filament\Actions\ExportarExcelAction;
+use App\Services\ReporteInventario;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -168,6 +170,7 @@ class EquipoComputosTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    ExportarExcelAction::enLote(ReporteInventario::COMPUTO),
                     DeleteBulkAction::make(),
                 ]),
             ])

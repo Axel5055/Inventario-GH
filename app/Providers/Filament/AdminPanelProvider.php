@@ -40,6 +40,7 @@ class AdminPanelProvider extends PanelProvider
                 'Catálogos',
                 'Suscripciones',
                 'Accesos',
+                'Reportes',
                 'Administración',
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
