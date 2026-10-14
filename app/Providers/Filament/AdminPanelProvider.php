@@ -35,7 +35,6 @@ class AdminPanelProvider extends PanelProvider
             ])
             // Orden de los grupos del menú lateral.
             ->navigationGroups([
-                'Filament Shield',
                 'Inventario',
                 'Catálogos',
                 'Suscripciones',
@@ -65,7 +64,9 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
-                FilamentShieldPlugin::make(),
+                FilamentShieldPlugin::make()
+                    ->navigationGroup('Administración')
+                    ->navigationSort(20),
             ])
             ->authMiddleware([
                 Authenticate::class,
