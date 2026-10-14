@@ -3,6 +3,9 @@
 namespace App\Filament\Resources\TipoDispositivos\Tables;
 
 use App\Models\EntregaDispositivo;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -33,6 +36,15 @@ class TipoDispositivosTable
             ->defaultSort('nombre')
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make()
+                    ->modalDescription(fn ($record) => EntregaDispositivo::where('tipo_dispositivo', $record->nombre)->exists()
+                        ? 'Este tipo ya se usó en registros de dispositivos: esos registros conservarán el nombre, pero el tipo dejará de aparecer para elegir. Si solo quieres ocultarlo, mejor desactívalo.'
+                        : '¿Seguro que quieres eliminar este tipo de dispositivo?'),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 }
