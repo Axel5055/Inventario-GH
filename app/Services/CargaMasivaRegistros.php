@@ -27,6 +27,7 @@ class CargaMasivaRegistros
     public function __construct(
         private readonly ExtractorResponsivaPdf $extractor,
         private readonly ResponsivaAFormulario $mapeador,
+        private readonly ExcelRegistros $excel,
     ) {}
 
     /**
@@ -76,6 +77,44 @@ class CargaMasivaRegistros
             }
 
             return $filas;
+        } catch (Throwable $e) {
+            report($e);
+
+            return [$this->fila($nombreOriginal, 'error', null, $e->getMessage())];
+        } finally {
+            $disco->delete($rutaRelativa);
+        }
+    }
+
+    /**
+     * Plantilla de Excel (o CSV): una fila por equipo, sin IA ni adjuntos.
+     *
+     * @return array<int, array{archivo: string, estado: string, nombre: ?string, mensaje: string}>
+     */
+    public function procesarExcel(string $tipo, string $rutaRelativa, string $nombreOriginal): array
+    {
+        $disco = Storage::disk('local');
+
+        try {
+            $filas = $this->excel->leer($disco->path($rutaRelativa), pathinfo($nombreOriginal, PATHINFO_EXTENSION), $tipo);
+
+            if ($filas === []) {
+                return [$this->fila($nombreOriginal, 'error', null, 'No se encontraron filas con datos debajo de los encabezados.')];
+            }
+
+            $resultado = [];
+            foreach ($filas as $fila) {
+                $origen = $nombreOriginal . ' · fila ' . $fila['fila'];
+
+                try {
+                    $resultado[] = $this->crear($tipo, $fila['datos'], $origen, null);
+                } catch (Throwable $e) {
+                    report($e);
+                    $resultado[] = $this->fila($origen, 'error', $fila['datos']['nombre_completo'] ?? $fila['datos']['nombre_colaborador'] ?? null, $e->getMessage());
+                }
+            }
+
+            return $resultado;
         } catch (Throwable $e) {
             report($e);
 

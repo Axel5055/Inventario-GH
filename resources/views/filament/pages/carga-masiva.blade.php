@@ -8,7 +8,7 @@
             class="space-y-3"
         >
             <p class="text-sm font-medium">
-                Leyendo documentos con IA… {{ $hechos }} de {{ $total }} procesados.
+                {{ $modoProceso === 'excel' ? 'Creando registros desde el Excel…' : 'Leyendo documentos con IA…' }} {{ $hechos }} de {{ $total }} procesados.
                 <span class="text-gray-500">No cierres esta página hasta que termine.</span>
             </p>
 

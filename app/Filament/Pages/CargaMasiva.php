@@ -7,9 +7,11 @@ use App\Filament\Resources\EquipoComputos\EquipoComputoResource;
 use App\Models\EquipoCelular;
 use App\Models\EquipoComputo;
 use App\Services\CargaMasivaRegistros;
+use App\Services\ExcelRegistros;
 use App\Services\ExtractorResponsivaPdf;
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
@@ -63,6 +65,27 @@ class CargaMasiva extends Page implements HasSchemas
 
     public string $modoProceso = 'archivos';
 
+    protected function getHeaderActions(): array
+    {
+        $permitidos = $this->tiposPermitidos();
+
+        return [
+            Action::make('plantillaComputo')
+                ->label('Plantilla Excel · Cómputo')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->visible(fn () => array_key_exists(ExtractorResponsivaPdf::TIPO_COMPUTO, $permitidos))
+                ->action(fn () => app(ExcelRegistros::class)->plantilla(ExtractorResponsivaPdf::TIPO_COMPUTO)),
+
+            Action::make('plantillaCelular')
+                ->label('Plantilla Excel · Móviles')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->visible(fn () => array_key_exists(ExtractorResponsivaPdf::TIPO_CELULAR, $permitidos))
+                ->action(fn () => app(ExcelRegistros::class)->plantilla(ExtractorResponsivaPdf::TIPO_CELULAR)),
+        ];
+    }
+
     public function mount(): void
     {
         $this->form->fill([
@@ -89,17 +112,19 @@ class CargaMasiva extends Page implements HasSchemas
                             ->options([
                                 'archivos' => 'Un archivo por responsiva',
                                 'unico' => 'Un solo PDF con varias responsivas',
+                                'excel' => 'Archivo de Excel con una fila por equipo',
                             ])
                             ->descriptions([
                                 'archivos' => 'Puedes subir varios archivos a la vez (PDF, JPG o PNG). Cada PDF se adjunta como responsiva del registro creado; las fotos solo se leen.',
                                 'unico' => 'Solo se crean los registros: no se adjunta ninguna responsiva, porque el PDF trae varias juntas.',
+                                'excel' => 'Usa la plantilla (botón «Plantilla Excel» arriba). No usa IA ni adjunta responsivas; solo crea los registros. Hasta ' . ExcelRegistros::MAX_FILAS . ' filas por archivo.',
                             ])
                             ->required()
                             ->live(),
                     ]),
 
                 Section::make('2. Sube los archivos')
-                    ->description('Los registros se crean como pendientes de revisión; lo que la IA no pueda leer queda vacío y se anota en Observaciones. Si el equipo ya está activo en el sistema, ese documento se omite y se te informa.')
+                    ->description('Los registros se crean como pendientes de revisión; lo que no se pueda leer (o lo que dejes vacío en el Excel) queda vacío y se anota en Observaciones. Si el equipo ya está activo en el sistema, ese registro se omite y se te informa.')
                     ->schema([
                         FileUpload::make('archivos')
                             ->label('Responsivas')
@@ -123,6 +148,23 @@ class CargaMasiva extends Page implements HasSchemas
                             ->helperText('Máximo 12 MB. Si es más grande, divídelo en varios PDF.')
                             ->visible(fn ($get) => $get('modo') === 'unico')
                             ->required(fn ($get) => $get('modo') === 'unico'),
+
+                        FileUpload::make('excel')
+                            ->label('Archivo de Excel')
+                            ->maxSize(5120)
+                            ->acceptedFileTypes([
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                'text/csv',
+                                'text/plain',
+                                'application/csv',
+                                'application/vnd.ms-excel',
+                            ])
+                            ->disk('local')
+                            ->directory('tmp/carga-masiva')
+                            ->storeFileNamesIn('nombre_excel')
+                            ->helperText('.xlsx o .csv, con los datos en la primera hoja y los encabezados de la plantilla en la primera fila.')
+                            ->visible(fn ($get) => $get('modo') === 'excel')
+                            ->required(fn ($get) => $get('modo') === 'excel'),
                     ]),
             ]);
     }
@@ -139,6 +181,9 @@ class CargaMasiva extends Page implements HasSchemas
         if ($modo === 'unico') {
             $ruta = $estado['pdf_unico'] ?? null;
             $cola = $ruta ? [['ruta' => $ruta, 'nombre' => $estado['nombre_pdf_unico'] ?? basename($ruta)]] : [];
+        } elseif ($modo === 'excel') {
+            $ruta = $estado['excel'] ?? null;
+            $cola = $ruta ? [['ruta' => $ruta, 'nombre' => $estado['nombre_excel'] ?? basename($ruta)]] : [];
         } else {
             $nombres = $estado['nombres_archivos'] ?? [];
             $cola = collect($estado['archivos'] ?? [])
@@ -186,9 +231,11 @@ class CargaMasiva extends Page implements HasSchemas
         $item = array_shift($this->cola);
         $servicio = app(CargaMasivaRegistros::class);
 
-        $filas = $this->modoProceso === 'unico'
-            ? $servicio->procesarPdfUnico($this->tipoProceso, $item['ruta'], $item['nombre'])
-            : $servicio->procesarArchivo($this->tipoProceso, $item['ruta'], $item['nombre']);
+        $filas = match ($this->modoProceso) {
+            'unico' => $servicio->procesarPdfUnico($this->tipoProceso, $item['ruta'], $item['nombre']),
+            'excel' => $servicio->procesarExcel($this->tipoProceso, $item['ruta'], $item['nombre']),
+            default => $servicio->procesarArchivo($this->tipoProceso, $item['ruta'], $item['nombre']),
+        };
 
         $this->resultados = [...$this->resultados, ...$filas];
 

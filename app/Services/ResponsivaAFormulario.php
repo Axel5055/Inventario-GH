@@ -107,6 +107,10 @@ class ResponsivaAFormulario
         $avisos = [];
         $datos = [];
 
+        if (in_array($d['tipo_movimiento'] ?? null, ['alta', 'baja', 'cambio_equipo', 'reasignacion', 'mantenimiento', 'prestamo_temporal'], true)) {
+            $datos['tipo_movimiento'] = $d['tipo_movimiento'];
+        }
+
         $datos['fecha_entrega'] = $this->fecha($d['fecha'] ?? null);
         $datos['nombre_usuario'] = $this->limpio($d['nombre_colaborador'] ?? null);
         $datos['numero_telefonico'] = $this->limpio($d['telefono'] ?? null, 20);
