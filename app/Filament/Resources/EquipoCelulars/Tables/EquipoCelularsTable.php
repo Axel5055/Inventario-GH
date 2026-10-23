@@ -6,6 +6,7 @@ use App\Support\OpcionesOrdenadas;
 use Filament\Actions\Action;
 use App\Filament\Actions\ExportarExcelAction;
 use App\Services\ReporteInventario;
+use App\Support\ResponsivaBaja;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -27,6 +28,13 @@ class EquipoCelularsTable
     {
         return $table
             ->columns([
+                TextColumn::make('estado_revision')
+                    ->label('Revisión')
+                    ->badge()
+                    ->color(fn($state) => $state === 'pendiente' ? 'warning' : 'success')
+                    ->formatStateUsing(fn($state) => $state === 'pendiente' ? '🟡 Pendiente' : '✅ Completo')
+                    ->toggleable(),
+
                 TextColumn::make('tipo_movimiento')
                     ->label('Status')
                     ->badge()
@@ -96,6 +104,13 @@ class EquipoCelularsTable
                     ->searchable(),
             ])
             ->filters([
+                SelectFilter::make('estado_revision')
+                    ->label('Revisión')
+                    ->options(OpcionesOrdenadas::alfabetico([
+                        'pendiente' => '🟡 Pendiente',
+                        'completo'  => '✅ Completo',
+                    ])),
+
                 SelectFilter::make('tipo_movimiento')
                     ->label('Tipo de Movimiento')
                     ->options(OpcionesOrdenadas::alfabetico([
@@ -131,12 +146,14 @@ class EquipoCelularsTable
                             ->required()
                             ->seconds(false)
                             ->displayFormat('d/m/Y'),
+
+                        ResponsivaBaja::subida('responsiva_baja', 'responsivas/baja-celulares'),
                     ])
                     ->action(function ($record, array $data): void {
                         $record->update([
                             'tipo_movimiento' => 'baja',
                             'fecha_baja'      => $data['fecha_baja'],
-                        ]);
+                        ] + (filled($data['responsiva_baja'] ?? null) ? ['responsiva_baja_pdf' => $data['responsiva_baja']] : []));
 
                         Notification::make()
                             ->title('Dispositivo dado de baja')

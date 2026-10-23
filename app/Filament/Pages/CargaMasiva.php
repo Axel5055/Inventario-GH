@@ -1,0 +1,263 @@
+<?php
+
+namespace App\Filament\Pages;
+
+use App\Filament\Resources\EquipoCelulars\EquipoCelularResource;
+use App\Filament\Resources\EquipoComputos\EquipoComputoResource;
+use App\Models\EquipoCelular;
+use App\Models\EquipoComputo;
+use App\Services\CargaMasivaRegistros;
+use App\Services\ExtractorResponsivaPdf;
+use BackedEnum;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Select;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Concerns\InteractsWithSchemas;
+use Filament\Schemas\Contracts\HasSchemas;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Storage;
+use UnitEnum;
+
+/**
+ * Carga masiva de registros desde responsivas: la IA lee cada documento y se
+ * crean registros "pendientes" que el personal revisa y valida. Se procesa un
+ * archivo por solicitud (el navegador va pidiendo el siguiente) para no chocar
+ * con el tiempo máximo de ejecución del servidor.
+ */
+class CargaMasiva extends Page implements HasSchemas
+{
+    use HasPageShield;
+    use InteractsWithSchemas;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowUpTray;
+
+    protected static ?string $navigationLabel = 'Carga Masiva';
+
+    protected static ?string $title = 'Carga masiva de registros';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Inventario';
+
+    protected static ?int $navigationSort = 40;
+
+    protected string $view = 'filament.pages.carga-masiva';
+
+    /** @var array<string, mixed>|null */
+    public ?array $data = [];
+
+    /** @var array<int, array{ruta: string, nombre: string}> */
+    public array $cola = [];
+
+    /** @var array<int, array{archivo: string, estado: string, nombre: ?string, mensaje: string}> */
+    public array $resultados = [];
+
+    public int $total = 0;
+
+    public bool $procesando = false;
+
+    public string $tipoProceso = ExtractorResponsivaPdf::TIPO_COMPUTO;
+
+    public string $modoProceso = 'archivos';
+
+    public function mount(): void
+    {
+        $this->form->fill([
+            'tipo' => array_key_first($this->tiposPermitidos()),
+            'modo' => 'archivos',
+        ]);
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->statePath('data')
+            ->components([
+                Section::make('1. ¿Qué vas a cargar?')
+                    ->schema([
+                        Select::make('tipo')
+                            ->label('Tipo de registro')
+                            ->options($this->tiposPermitidos())
+                            ->required()
+                            ->native(false),
+
+                        Radio::make('modo')
+                            ->label('¿Cómo vienen las responsivas?')
+                            ->options([
+                                'archivos' => 'Un archivo por responsiva',
+                                'unico' => 'Un solo PDF con varias responsivas',
+                            ])
+                            ->descriptions([
+                                'archivos' => 'Puedes subir varios archivos a la vez (PDF, JPG o PNG). Cada PDF se adjunta como responsiva del registro creado; las fotos solo se leen.',
+                                'unico' => 'Solo se crean los registros: no se adjunta ninguna responsiva, porque el PDF trae varias juntas.',
+                            ])
+                            ->required()
+                            ->live(),
+                    ]),
+
+                Section::make('2. Sube los archivos')
+                    ->description('Los registros se crean como pendientes de revisión; lo que la IA no pueda leer queda vacío y se anota en Observaciones. Si el equipo ya está activo en el sistema, ese documento se omite y se te informa.')
+                    ->schema([
+                        FileUpload::make('archivos')
+                            ->label('Responsivas')
+                            ->multiple()
+                            ->maxFiles(30)
+                            ->maxSize(10240)
+                            ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])
+                            ->disk('local')
+                            ->directory('tmp/carga-masiva')
+                            ->storeFileNamesIn('nombres_archivos')
+                            ->visible(fn ($get) => $get('modo') === 'archivos')
+                            ->required(fn ($get) => $get('modo') === 'archivos'),
+
+                        FileUpload::make('pdf_unico')
+                            ->label('PDF con varias responsivas')
+                            ->maxSize(12288)
+                            ->acceptedFileTypes(['application/pdf'])
+                            ->disk('local')
+                            ->directory('tmp/carga-masiva')
+                            ->storeFileNamesIn('nombre_pdf_unico')
+                            ->helperText('Máximo 12 MB. Si es más grande, divídelo en varios PDF.')
+                            ->visible(fn ($get) => $get('modo') === 'unico')
+                            ->required(fn ($get) => $get('modo') === 'unico'),
+                    ]),
+            ]);
+    }
+
+    public function iniciar(): void
+    {
+        $estado = $this->form->getState();
+
+        $tipo = $estado['tipo'] ?? null;
+        abort_unless(array_key_exists($tipo, $this->tiposPermitidos()), 403);
+
+        $modo = $estado['modo'] ?? 'archivos';
+
+        if ($modo === 'unico') {
+            $ruta = $estado['pdf_unico'] ?? null;
+            $cola = $ruta ? [['ruta' => $ruta, 'nombre' => $estado['nombre_pdf_unico'] ?? basename($ruta)]] : [];
+        } else {
+            $nombres = $estado['nombres_archivos'] ?? [];
+            $cola = collect($estado['archivos'] ?? [])
+                ->map(fn ($ruta, $clave) => ['ruta' => $ruta, 'nombre' => $nombres[$clave] ?? $nombres[$ruta] ?? basename($ruta)])
+                ->values()
+                ->all();
+        }
+
+        if ($cola === []) {
+            Notification::make()->title('Sube al menos un archivo')->warning()->send();
+
+            return;
+        }
+
+        $this->cola = $cola;
+        $this->total = count($cola);
+        $this->resultados = [];
+        $this->tipoProceso = $tipo;
+        $this->modoProceso = $modo;
+        $this->procesando = true;
+
+        $this->form->fill(['tipo' => $tipo, 'modo' => $modo]);
+    }
+
+    /**
+     * Procesa el siguiente archivo de la cola. Devuelve true mientras queden más.
+     */
+    public function procesarSiguiente(): bool
+    {
+        if (! $this->procesando) {
+            return false;
+        }
+
+        abort_unless(array_key_exists($this->tipoProceso, $this->tiposPermitidos()), 403);
+
+        if ($this->cola === []) {
+            $this->terminar();
+
+            return false;
+        }
+
+        // La lectura con IA puede tardar: se amplía el límite de este solo paso.
+        @set_time_limit(420);
+
+        $item = array_shift($this->cola);
+        $servicio = app(CargaMasivaRegistros::class);
+
+        $filas = $this->modoProceso === 'unico'
+            ? $servicio->procesarPdfUnico($this->tipoProceso, $item['ruta'], $item['nombre'])
+            : $servicio->procesarArchivo($this->tipoProceso, $item['ruta'], $item['nombre']);
+
+        $this->resultados = [...$this->resultados, ...$filas];
+
+        if ($this->cola === []) {
+            $this->terminar();
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * El navegador perdió la conexión o el servidor cortó la solicitud por tiempo.
+     */
+    public function procesoInterrumpido(): void
+    {
+        foreach ($this->cola as $item) {
+            Storage::disk('local')->delete($item['ruta']);
+            $this->resultados[] = ['archivo' => $item['nombre'], 'estado' => 'error', 'nombre' => null, 'mensaje' => 'No se procesó: el proceso se interrumpió. Súbelo de nuevo.'];
+        }
+
+        $this->cola = [];
+        $this->terminar();
+    }
+
+    public function nuevaCarga(): void
+    {
+        $this->resultados = [];
+        $this->total = 0;
+        $this->mount();
+    }
+
+    private function terminar(): void
+    {
+        $this->procesando = false;
+
+        $creados = collect($this->resultados)->where('estado', 'creado')->count();
+        $problemas = count($this->resultados) - $creados;
+
+        Notification::make()
+            ->title($creados . ' registro(s) creado(s) como pendientes')
+            ->body($problemas > 0 ? "{$problemas} documento(s) requieren atención: revisa el detalle." : 'Ya puedes revisarlos y validarlos.')
+            ->{$problemas > 0 ? 'warning' : 'success'}()
+            ->send();
+    }
+
+    public function urlPendientes(): string
+    {
+        $recurso = $this->tipoProceso === ExtractorResponsivaPdf::TIPO_CELULAR ? EquipoCelularResource::class : EquipoComputoResource::class;
+
+        return $recurso::getUrl('index', ['tableFilters' => ['estado_revision' => ['value' => 'pendiente']]]);
+    }
+
+    /**
+     * Tipos que el usuario puede crear.
+     *
+     * @return array<string, string>
+     */
+    private function tiposPermitidos(): array
+    {
+        $usuario = auth()->user();
+
+        return collect([
+            ExtractorResponsivaPdf::TIPO_COMPUTO => ['Equipos de Cómputo', EquipoComputo::class],
+            ExtractorResponsivaPdf::TIPO_CELULAR => ['Equipos Móviles', EquipoCelular::class],
+        ])
+            ->filter(fn ($def) => $usuario?->can('create', $def[1]))
+            ->map(fn ($def) => $def[0])
+            ->all();
+    }
+}

@@ -31,7 +31,10 @@ class EquipoCelular extends Model
         'curp',
         'observaciones',
         'responsiva_pdf',
+        'responsiva_baja_pdf',
         'usuario_referencia',
+        'origen_registro',
+        'estado_revision',
     ];
 
     protected $casts = [

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\EquipoCelulars\Schemas;
 
 use App\Support\AltaRapidaCatalogo;
 use App\Support\OpcionesOrdenadas;
+use App\Support\ResponsivaBaja;
 use App\Models\Area;
 use App\Models\EquipoCelular;
 use App\Models\Marca;
@@ -67,7 +68,8 @@ class EquipoCelularForm
                                                 ]))
                                                 ->default('alta')
                                                 ->required()
-                                                ->native(false),
+                                                ->native(false)
+                                                ->live(),
 
                                             DateTimePicker::make('fecha_entrega')
                                                 ->label('Fecha de Entrega')
@@ -237,6 +239,20 @@ class EquipoCelularForm
                                                 )
                                                 ->downloadable()
                                                 ->openable(),
+
+                                            FileUpload::make('responsiva_baja_pdf')
+                                                ->label('Responsiva de baja (opcional)')
+                                                ->helperText('Se guarda aparte de la responsiva de entrega; no la reemplaza.')
+                                                ->acceptedFileTypes(['application/pdf'])
+                                                ->directory('responsivas/baja-celulares')
+                                                ->disk('local')
+                                                ->maxSize(10240)
+                                                ->getUploadedFileNameForStorageUsing(
+                                                    fn($get) => Str::slug($get('nombre_usuario') ?: 'equipo') . '-baja-' . Str::random(6) . '.pdf'
+                                                )
+                                                ->downloadable()
+                                                ->openable()
+                                                ->visible(fn($get) => $get('tipo_movimiento') === 'baja' || filled($get('responsiva_baja_pdf'))),
                                         ]),
                                 ]),
                         ]),
@@ -347,12 +363,15 @@ class EquipoCelularForm
             ->modalSubmitActionLabel('Sí, dar de baja el anterior y guardar')
             ->modalCancelActionLabel('No, cancelar')
             ->color('danger')
-            ->action(function (array $arguments, $livewire) {
+            ->form([
+                ResponsivaBaja::subida('responsiva_baja', 'responsivas/baja-celulares'),
+            ])
+            ->action(function (array $data, array $arguments, $livewire) {
                 foreach (self::conflictosDe($livewire) as $conflicto) {
                     $conflicto['registro']->update([
                         'tipo_movimiento' => 'baja',
                         'fecha_baja' => now(),
-                    ]);
+                    ] + (filled($data['responsiva_baja'] ?? null) ? ['responsiva_baja_pdf' => $data['responsiva_baja']] : []));
                 }
 
                 if (method_exists($livewire, 'create')) {

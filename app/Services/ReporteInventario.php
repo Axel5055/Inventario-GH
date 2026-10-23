@@ -37,6 +37,12 @@ class ReporteInventario
         self::DISPOSITIVOS => 'Dispositivos Externos',
     ];
 
+    private const ORIGENES = [
+        'publico' => 'Formulario público',
+        'masivo' => 'Carga masiva',
+        'manual' => 'Administración',
+    ];
+
     private const MOVIMIENTOS = [
         'alta' => 'Alta',
         'baja' => 'Baja',
@@ -241,8 +247,10 @@ class ReporteInventario
                 'Antivirus vigente hasta' => fn ($r) => $this->fecha($r->antivirus_vigencia),
                 'Usuario del equipo' => fn ($r) => $r->usuario_equipo,
                 'Correo de Outlook' => fn ($r) => $r->outlook_correo,
-                'Origen del registro' => fn ($r) => $r->origen_registro === 'publico' ? 'Formulario público' : 'Administración',
+                'Origen del registro' => fn ($r) => self::ORIGENES[$r->origen_registro] ?? 'Administración',
                 'Revisión' => fn ($r) => $r->estado_revision === 'pendiente' ? 'Pendiente' : 'Completo',
+                'Responsiva de entrega' => fn ($r) => filled($r->responsiva_pdf) ? 'Sí' : 'No',
+                'Responsiva de baja' => fn ($r) => filled($r->responsiva_baja_pdf) ? 'Sí' : 'No',
                 'Observaciones' => fn ($r) => $r->observaciones,
                 'Registrado el' => fn ($r) => $this->fecha($r->created_at, true),
             ],
@@ -256,6 +264,10 @@ class ReporteInventario
                 'Número telefónico' => fn ($r) => $r->numero_telefonico,
                 'IMEI' => fn ($r) => $r->imei,
                 'ICCID' => fn ($r) => $r->iccid,
+                'Responsiva de entrega' => fn ($r) => filled($r->responsiva_pdf) ? 'Sí' : 'No',
+                'Responsiva de baja' => fn ($r) => filled($r->responsiva_baja_pdf) ? 'Sí' : 'No',
+                'Origen del registro' => fn ($r) => self::ORIGENES[$r->origen_registro] ?? 'Administración',
+                'Revisión' => fn ($r) => $r->estado_revision === 'pendiente' ? 'Pendiente' : 'Completo',
                 'Observaciones' => fn ($r) => $r->observaciones,
                 'Registrado el' => fn ($r) => $this->fecha($r->created_at, true),
             ],

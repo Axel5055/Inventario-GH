@@ -36,9 +36,33 @@ class ExtractorResponsivaPdf
     }
 
     /**
+     * Para un PDF con VARIAS responsivas (una o más páginas cada una): devuelve un
+     * arreglo con un registro por responsiva detectada.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function extraerVarios(string $rutaArchivo, string $tipo): array
+    {
+        if (! is_file($rutaArchivo)) {
+            throw new RuntimeException('No se encontró el archivo subido.');
+        }
+
+        $mime = mime_content_type($rutaArchivo) ?: 'application/pdf';
+        $datos = base64_encode(file_get_contents($rutaArchivo));
+
+        $resultado = config('services.ia.proveedor') === 'anthropic'
+            ? $this->conClaude($datos, $mime, $tipo, varios: true)
+            : $this->conGemini($datos, $mime, $tipo, varios: true);
+
+        $lista = array_is_list($resultado) ? $resultado : ($resultado['responsivas'] ?? []);
+
+        return array_values(array_filter($lista, 'is_array'));
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function conGemini(string $datos, string $mime, string $tipo): array
+    private function conGemini(string $datos, string $mime, string $tipo, bool $varios = false): array
     {
         $clave = config('services.gemini.key');
 
@@ -55,9 +79,7 @@ class ExtractorResponsivaPdf
             'contents' => [[
                 'parts' => [
                     ['inline_data' => ['mime_type' => $mime, 'data' => $datos]],
-                    ['text' => $this->instrucciones($tipo) . "
-
-" . $this->formatoJson($tipo)],
+                    ['text' => $this->instrucciones($tipo, $varios) . "\n\n" . $this->formatoJson($tipo, $varios)],
                 ],
             ]],
             'generationConfig' => [
@@ -71,7 +93,7 @@ class ExtractorResponsivaPdf
             for ($intento = 1; $intento <= 2; $intento++) {
                 $respuesta = Http::withHeaders(['x-goog-api-key' => $clave])
                     ->acceptJson()
-                    ->timeout(180)
+                    ->timeout($varios ? 420 : 180)
                     ->post("https://generativelanguage.googleapis.com/v1beta/models/{$modelo}:generateContent", $payload);
 
                 if (! in_array($respuesta->status(), [429, 503], true)) {
@@ -117,7 +139,7 @@ class ExtractorResponsivaPdf
     /**
      * @return array<string, mixed>
      */
-    private function conClaude(string $datos, string $mime, string $tipo): array
+    private function conClaude(string $datos, string $mime, string $tipo, bool $varios = false): array
     {
         $clave = config('services.anthropic.key');
 
@@ -135,19 +157,23 @@ class ExtractorResponsivaPdf
             'anthropic-version' => '2023-06-01',
         ])
             ->acceptJson()
-            ->timeout(180)
+            ->timeout($varios ? 420 : 180)
             ->post('https://api.anthropic.com/v1/messages', [
                 'model' => config('services.anthropic.model'),
-                'max_tokens' => 2000,
+                'max_tokens' => $varios ? 16000 : 2000,
                 'tools' => [[
                     'name' => 'registrar_datos',
-                    'description' => 'Registra los datos que aparecen escritos en la responsiva.',
-                    'input_schema' => $this->esquema($tipo),
+                    'description' => $varios
+                        ? 'Registra los datos de cada responsiva que aparece en el documento.'
+                        : 'Registra los datos que aparecen escritos en la responsiva.',
+                    'input_schema' => $varios
+                        ? ['type' => 'object', 'properties' => ['responsivas' => ['type' => 'array', 'items' => $this->esquema($tipo)]], 'required' => ['responsivas']]
+                        : $this->esquema($tipo),
                 ]],
                 'tool_choice' => ['type' => 'tool', 'name' => 'registrar_datos'],
                 'messages' => [[
                     'role' => 'user',
-                    'content' => [$archivo, ['type' => 'text', 'text' => $this->instrucciones($tipo)]],
+                    'content' => [$archivo, ['type' => 'text', 'text' => $this->instrucciones($tipo, $varios)]],
                 ]],
             ]);
 
@@ -166,14 +192,18 @@ class ExtractorResponsivaPdf
         throw new RuntimeException('La IA no devolvió datos legibles del documento.');
     }
 
-    private function instrucciones(string $tipo): string
+    private function instrucciones(string $tipo, bool $varios = false): string
     {
         $documento = $tipo === self::TIPO_CELULAR
             ? 'una carta responsiva de resguardo de equipo móvil/celular'
             : 'un formato de entrega de equipo de cómputo';
 
+        $encabezado = $varios
+            ? "Este PDF reúne VARIAS responsivas de Grupo Hunan (cada una es {$documento} y puede ocupar una o más páginas). Devuelve un registro por cada responsiva distinta, en el orden en que aparecen; no mezcles datos de una responsiva con los de otra y no repitas una misma responsiva. Ignora las páginas que no sean una responsiva (portadas, hojas en blanco, anexos)."
+            : "Este documento es {$documento} de Grupo Hunan.";
+
         return <<<TXT
-Este documento es {$documento} de Grupo Hunan. Puede ser la versión actual o una anterior, y puede ser un PDF digital, un escaneo o una foto (posiblemente inclinada), impresa o llenada a mano.
+{$encabezado} Puede ser la versión actual o una anterior, y puede ser un PDF digital, un escaneo o una foto (posiblemente inclinada), impresa o llenada a mano.
 
 Extrae únicamente los datos del formulario que estén realmente escritos o marcados. Reglas:
 - Si un campo está vacío, en blanco o ilegible, devuélvelo como null. Nunca inventes ni deduzcas valores.
@@ -196,7 +226,7 @@ TXT;
     /**
      * Lista de claves esperadas, para los modelos que no usan esquema formal.
      */
-    private function formatoJson(string $tipo): string
+    private function formatoJson(string $tipo, bool $varios = false): string
     {
         $lineas = [];
 
@@ -208,6 +238,10 @@ TXT;
                     : 'texto (o null)');
             $nota = isset($definicion['description']) ? ' — ' . $definicion['description'] : '';
             $lineas[] = "- {$clave}: {$detalle}{$nota}";
+        }
+
+        if ($varios) {
+            return "Responde SOLO con un objeto JSON con la clave \"responsivas\": una lista con un objeto por cada responsiva del documento. Cada objeto tiene exactamente estas claves (null si el dato no aparece):\n" . implode("\n", $lineas);
         }
 
         return "Responde SOLO con un objeto JSON con exactamente estas claves (null si el dato no aparece):\n" . implode("\n", $lineas);

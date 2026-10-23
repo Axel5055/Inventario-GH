@@ -36,6 +36,7 @@ class EquipoComputo extends Model
         'usuario_equipo',
         'pin_password',
         'responsiva_pdf',
+        'responsiva_baja_pdf',
         'archivo_info_txt',
         'sistema_operativo',
         'windows_version',

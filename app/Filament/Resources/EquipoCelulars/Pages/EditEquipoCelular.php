@@ -46,6 +46,10 @@ class EditEquipoCelular extends EditRecord
             $data['fecha_baja'] = null;
         }
 
+        // Guardar desde el panel significa que el personal ya revisó y completó
+        // el registro (incluyendo los que llegaron pendientes por carga masiva).
+        $data['estado_revision'] = 'completo';
+
         return $data;
     }
 }

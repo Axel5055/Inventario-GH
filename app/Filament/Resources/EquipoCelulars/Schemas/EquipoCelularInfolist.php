@@ -37,6 +37,29 @@ class EquipoCelularInfolist
 
                             Grid::make(1)
                                 ->schema([
+                                    Placeholder::make('estado_responsiva')
+                                        ->hiddenLabel()
+                                        ->size(TextSize::Large)
+                                        ->content(
+                                            fn($record) =>
+                                            blank($record->responsiva_pdf) ? 'Sin responsiva' : ''
+                                        )
+                                        ->badge()
+                                        ->color(
+                                            fn($record) =>
+                                            blank($record->responsiva_pdf) ? 'danger' : 'success'
+                                        )
+                                        ->alignEnd(),
+
+                                    Placeholder::make('estado_responsiva_baja')
+                                        ->hiddenLabel()
+                                        ->size(TextSize::Large)
+                                        ->content('Baja sin responsiva')
+                                        ->badge()
+                                        ->color('warning')
+                                        ->visible(fn($record) => $record->tipo_movimiento === 'baja' && blank($record->responsiva_baja_pdf))
+                                        ->alignEnd(),
+
                                     Actions::make([
                                         Action::make('descargar')
                                             ->label('Descargar Responsiva')
@@ -46,6 +69,15 @@ class EquipoCelularInfolist
                                             ->action(fn($record) => response()->download(
                                                 Storage::disk('local')->path($record->responsiva_pdf),
                                                 preg_replace('/[\/\\\\:*?"<>|]/', '', $record->nombre_usuario) . '.pdf'
+                                            )),
+                                        Action::make('descargar_baja')
+                                            ->label('Descargar Responsiva de Baja')
+                                            ->icon('heroicon-o-arrow-down-tray')
+                                            ->color('danger')
+                                            ->visible(fn($record) => filled($record->responsiva_baja_pdf))
+                                            ->action(fn($record) => response()->download(
+                                                Storage::disk('local')->path($record->responsiva_baja_pdf),
+                                                preg_replace('/[\/\\\\:*?"<>|]/', '', $record->nombre_usuario) . ' - baja.pdf'
                                             )),
                                     ])->alignEnd()->hiddenLabel(),
                                 ]),

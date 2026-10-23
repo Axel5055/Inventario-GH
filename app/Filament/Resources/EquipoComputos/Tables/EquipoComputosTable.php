@@ -6,6 +6,7 @@ use App\Support\OpcionesOrdenadas;
 use Filament\Actions\Action;
 use App\Filament\Actions\ExportarExcelAction;
 use App\Services\ReporteInventario;
+use App\Support\ResponsivaBaja;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -152,12 +153,14 @@ class EquipoComputosTable
                             ->required()
                             ->seconds(false)
                             ->displayFormat('d/m/Y'),
+
+                        ResponsivaBaja::subida('responsiva_baja', 'responsivas/baja-computo'),
                     ])
                     ->action(function ($record, array $data): void {
                         $record->update([
                             'tipo_movimiento' => 'baja',
                             'fecha_baja'      => $data['fecha_baja'],
-                        ]);
+                        ] + (filled($data['responsiva_baja'] ?? null) ? ['responsiva_baja_pdf' => $data['responsiva_baja']] : []));
 
                         Notification::make()
                             ->title('Equipo dado de baja')
