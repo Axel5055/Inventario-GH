@@ -18,9 +18,10 @@ use Throwable;
  * (igual que el formulario público): lo que la IA no logra leer queda vacío y
  * se anota en Observaciones para que el personal lo complete y valide.
  *
- * Nunca da de baja registros existentes: si el equipo ya está activo
- * (mismo número de serie, o mismo teléfono/IMEI en móviles) el registro se
- * omite y se informa para que se resuelva a mano.
+ * Nunca modifica registros existentes: si el equipo ya está activo (mismo
+ * número de serie, teléfono o IMEI, o mismo nombre y modelo), el nuevo se crea
+ * igual pero como BAJA y pendiente, con la advertencia en Observaciones, para
+ * que el personal decida cuál debe quedar vigente.
  */
 class CargaMasivaRegistros
 {
@@ -143,20 +144,16 @@ class CargaMasivaRegistros
         }
 
         $d['tipo_movimiento'] ??= 'alta';
-        $esBaja = $d['tipo_movimiento'] === 'baja';
 
-        // Nunca se da de baja a nadie desde aquí: si ya hay un registro activo, se omite.
-        if (! $esBaja) {
-            $conflicto = $celular
-                ? EquipoCelularForm::buscarConflictos($d, null)->map(fn ($c) => $c['registro']->nombre_usuario . ' — ' . implode(' y ', $c['motivos']))->first()
-                : (($e = EquipoComputoForm::buscarConflictoNumeroSerie($d['numero_serie'] ?? null, null))
-                    ? $e->nombre_usuario . ' — mismo número de serie (' . $e->numero_serie . ')'
-                    : null);
+        // Si ya hay un registro activo que coincide, este se crea igual pero como BAJA y
+        // pendiente de revisar: no se toca el registro existente ni se pierde el documento.
+        $duplicado = $d['tipo_movimiento'] === 'baja' ? null : $this->buscarDuplicado($celular, $d);
 
-            if ($conflicto) {
-                return $this->fila($origen, 'omitido', $d['nombre_usuario'] ?? null, "Ya existe un registro activo: {$conflicto}. Resuélvelo manualmente.");
-            }
+        if ($duplicado) {
+            $d['tipo_movimiento'] = 'baja';
         }
+
+        $esBaja = $d['tipo_movimiento'] === 'baja';
 
         // Campos obligatorios en BD que no se pudieron leer: se completan con un valor
         // provisional y se avisa en Observaciones.
@@ -191,13 +188,14 @@ class CargaMasivaRegistros
         }
 
         if ($esBaja) {
-            $d['fecha_baja'] = $d['fecha_entrega'];
+            $d['fecha_baja'] = $duplicado ? now()->format('Y-m-d H:i:s') : $d['fecha_entrega'];
         }
 
         $notas = array_filter([
             $d['observaciones'] ?? null,
             '⚠ Carga masiva (' . $origen . '): pendiente de revisar'
                 . ($faltantes ? ' — no se detectó: ' . implode(', ', array_unique($faltantes)) : '') . '.',
+            $duplicado ? "⚠ Posible duplicado: ya existe un registro activo ({$duplicado}). Se creó como BAJA; revisa cuál debe quedar vigente." : null,
             $avisos ? 'Avisos: ' . implode(' ', $avisos) : null,
         ]);
         $d['observaciones'] = implode("\n", $notas);
@@ -213,12 +211,46 @@ class CargaMasivaRegistros
 
         $registro = $modelo::create($d);
 
-        return $this->fila(
-            $origen,
-            'creado',
-            $registro->nombre_usuario,
-            $faltantes ? 'Creado como pendiente. Falta: ' . implode(', ', array_unique($faltantes)) . '.' : 'Creado como pendiente.',
-        );
+        $detalle = $faltantes ? ' Falta: ' . implode(', ', array_unique($faltantes)) . '.' : '';
+
+        if ($duplicado) {
+            return $this->fila($origen, 'duplicado', $registro->nombre_usuario, "Creado como BAJA y pendiente de revisar: ya existe un registro activo ({$duplicado}).{$detalle}");
+        }
+
+        return $this->fila($origen, 'creado', $registro->nombre_usuario, 'Creado como pendiente.' . $detalle);
+    }
+
+    /**
+     * Describe el registro ACTIVO que coincide con el que se va a crear, o null.
+     * Coincide si comparte número de serie (cómputo), teléfono o IMEI (móviles),
+     * o —cuando no hay un identificador que lo distinga— el mismo nombre y modelo.
+     *
+     * @param  array<string, mixed>  $d
+     */
+    private function buscarDuplicado(bool $celular, array $d): ?string
+    {
+        if ($celular) {
+            $coincidencia = EquipoCelularForm::buscarConflictos($d, null)
+                ->map(fn ($c) => $c['registro']->nombre_usuario . ' — ' . implode(' y ', $c['motivos']))
+                ->first();
+        } else {
+            $porSerie = EquipoComputoForm::buscarConflictoNumeroSerie($d['numero_serie'] ?? null, null);
+            $coincidencia = $porSerie ? $porSerie->nombre_usuario . ' — mismo número de serie (' . $porSerie->numero_serie . ')' : null;
+        }
+
+        if ($coincidencia || blank($d['nombre_usuario'] ?? null) || blank($d['modelo'] ?? null)) {
+            return $coincidencia;
+        }
+
+        $modelo = $celular ? EquipoCelular::class : EquipoComputo::class;
+
+        $igual = $modelo::query()
+            ->where('tipo_movimiento', '!=', 'baja')
+            ->where('nombre_usuario', $d['nombre_usuario'])
+            ->where('modelo', $d['modelo'])
+            ->first();
+
+        return $igual ? $igual->nombre_usuario . ' — mismo nombre y modelo (' . $igual->modelo . ')' : null;
     }
 
     /**

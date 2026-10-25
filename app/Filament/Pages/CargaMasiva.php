@@ -124,7 +124,7 @@ class CargaMasiva extends Page implements HasSchemas
                     ]),
 
                 Section::make('2. Sube los archivos')
-                    ->description('Los registros se crean como pendientes de revisión; lo que no se pueda leer (o lo que dejes vacío en el Excel) queda vacío y se anota en Observaciones. Si el equipo ya está activo en el sistema, ese registro se omite y se te informa.')
+                    ->description('Los registros se crean como pendientes de revisión; lo que no se pueda leer (o lo que dejes vacío en el Excel) queda vacío y se anota en Observaciones. Si el equipo ya está activo en el sistema (mismo número de serie, teléfono o IMEI, o mismo nombre y modelo), el nuevo se crea igual pero como BAJA y pendiente, con la advertencia en Observaciones.')
                     ->schema([
                         FileUpload::make('archivos')
                             ->label('Responsivas')
@@ -273,13 +273,20 @@ class CargaMasiva extends Page implements HasSchemas
     {
         $this->procesando = false;
 
-        $creados = collect($this->resultados)->where('estado', 'creado')->count();
-        $problemas = count($this->resultados) - $creados;
+        $resultados = collect($this->resultados);
+        $duplicados = $resultados->where('estado', 'duplicado')->count();
+        $creados = $resultados->where('estado', 'creado')->count() + $duplicados;
+        $problemas = $resultados->whereIn('estado', ['omitido', 'error'])->count();
+
+        $avisos = array_filter([
+            $duplicados > 0 ? "{$duplicados} se crearon como BAJA por posible duplicado." : null,
+            $problemas > 0 ? "{$problemas} documento(s) no se pudieron crear." : null,
+        ]);
 
         Notification::make()
             ->title($creados . ' registro(s) creado(s) como pendientes')
-            ->body($problemas > 0 ? "{$problemas} documento(s) requieren atención: revisa el detalle." : 'Ya puedes revisarlos y validarlos.')
-            ->{$problemas > 0 ? 'warning' : 'success'}()
+            ->body($avisos ? implode(' ', $avisos) . ' Revisa el detalle.' : 'Ya puedes revisarlos y validarlos.')
+            ->{$avisos ? 'warning' : 'success'}()
             ->send();
     }
 

@@ -29,7 +29,7 @@
     @endif
 
     @if ($resultados !== [])
-        @php($creados = collect($resultados)->where('estado', 'creado')->count())
+        @php($creados = collect($resultados)->whereIn('estado', ['creado', 'duplicado'])->count())
 
         <x-filament::section heading="Resultado" :description="$creados . ' de ' . count($resultados) . ' creados como pendientes'">
             <div class="overflow-x-auto">
@@ -47,8 +47,8 @@
                             <tr class="border-b border-gray-100 align-top dark:border-white/5">
                                 <td class="px-2 py-2">{{ $fila['archivo'] }}</td>
                                 <td class="px-2 py-2">
-                                    <x-filament::badge :color="match ($fila['estado']) { 'creado' => 'success', 'omitido' => 'warning', default => 'danger' }">
-                                        {{ match ($fila['estado']) { 'creado' => 'Creado', 'omitido' => 'Omitido', default => 'Error' } }}
+                                    <x-filament::badge :color="match ($fila['estado']) { 'creado' => 'success', 'duplicado', 'omitido' => 'warning', default => 'danger' }">
+                                        {{ match ($fila['estado']) { 'creado' => 'Creado', 'duplicado' => 'Creado como baja', 'omitido' => 'Omitido', default => 'Error' } }}
                                     </x-filament::badge>
                                 </td>
                                 <td class="px-2 py-2">{{ $fila['nombre'] ?? '—' }}</td>

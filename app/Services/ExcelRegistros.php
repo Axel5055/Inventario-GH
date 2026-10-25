@@ -110,7 +110,7 @@ class ExcelRegistros
             $writer->addNewSheetAndMakeItCurrent()->setName('Instrucciones');
             $writer->addRow(Row::fromValues(['Cómo llenar la hoja «Datos»'], $negrita));
             $writer->addRow(Row::fromValues(['Una fila por equipo. No cambies los encabezados. Lo que dejes vacío se completa después en la revisión; solo «Nombre completo» es necesario.']));
-            $writer->addRow(Row::fromValues(['Los registros se crean como «pendientes» para que los revises y valides. Si el equipo ya está activo en el sistema (mismo ' . ($celular ? 'teléfono o IMEI' : 'número de serie') . '), esa fila se omite.']));
+            $writer->addRow(Row::fromValues(['Los registros se crean como «pendientes» para que los revises y valides. Si el equipo ya está activo en el sistema (mismo ' . ($celular ? 'teléfono o IMEI' : 'número de serie') . ', o mismo nombre y modelo), esa fila se crea igual pero como BAJA y pendiente, con la advertencia en Observaciones.']));
             $writer->addRow(Row::fromValues([]));
             $writer->addRow(Row::fromValues(['Columna', 'Obligatoria', 'Qué poner'], $negrita));
             foreach ($columnas as $etiqueta => $def) {
