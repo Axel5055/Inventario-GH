@@ -51,7 +51,11 @@ class CargarDesdePdfAction
                     $estado = $livewire->form->getRawState();
 
                     if ($disco->mimeType($archivo) === 'application/pdf') {
-                        $directorio = $tipo === ExtractorResponsivaPdf::TIPO_CELULAR ? 'responsivas/celulares' : 'responsivas/computo';
+                        $directorio = match ($tipo) {
+                            ExtractorResponsivaPdf::TIPO_CELULAR => 'responsivas/celulares',
+                            ExtractorResponsivaPdf::TIPO_DISPOSITIVOS => 'responsivas/dispositivos',
+                            default => 'responsivas/computo',
+                        };
                         $nombre = $resultado['datos']['nombre_usuario'] ?? $estado['nombre_usuario'] ?? null;
                         $destino = $directorio . '/' . Str::slug($nombre ?: 'equipo') . '-' . Str::random(6) . '.pdf';
 

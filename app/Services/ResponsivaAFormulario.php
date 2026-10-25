@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Area;
 use App\Models\Marca;
 use App\Models\Sucursal;
+use App\Models\TipoDispositivo;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -32,7 +33,11 @@ class ResponsivaAFormulario
      */
     public function mapear(array $d, string $tipo): array
     {
-        return $tipo === ExtractorResponsivaPdf::TIPO_CELULAR ? $this->celular($d) : $this->computo($d);
+        return match ($tipo) {
+            ExtractorResponsivaPdf::TIPO_CELULAR => $this->celular($d),
+            ExtractorResponsivaPdf::TIPO_DISPOSITIVOS => $this->dispositivos($d),
+            default => $this->computo($d),
+        };
     }
 
     /**
@@ -147,6 +152,63 @@ class ResponsivaAFormulario
         if ($datos['nombre_usuario']) {
             $datos['usuario_referencia'] = Str::lower(str_replace(' ', '.', $datos['nombre_usuario']));
         }
+
+        return ['datos' => $this->sinVacios($datos), 'avisos' => $avisos];
+    }
+
+    /**
+     * Dispositivos Externos: el tipo se empata con el catálogo editable de tipos
+     * (si no existe cae en «Otro») y la marca, que es texto libre, se normaliza al
+     * nombre del catálogo cuando coincide.
+     *
+     * @param  array<string, mixed>  $d
+     * @return array{datos: array<string, mixed>, avisos: array<int, string>}
+     */
+    private function dispositivos(array $d): array
+    {
+        $avisos = [];
+        $datos = [];
+
+        if (in_array($d['tipo_movimiento'] ?? null, ['entrega', 'devolucion'], true)) {
+            $datos['tipo_movimiento'] = $d['tipo_movimiento'];
+        }
+
+        $fecha = $this->fecha($d['fecha'] ?? null);
+        $datos['fecha_entrega'] = $fecha ? substr($fecha, 0, 10) : null;
+        $datos['nombre_usuario'] = $this->limpio($d['nombre_completo'] ?? null);
+        $datos['correo_electronico'] = $this->limpio($d['correo'] ?? null);
+
+        $datos['sucursal_id'] = $this->catalogo(
+            Sucursal::where('activo', true)->pluck('nombre', 'id'), $d['sucursal'] ?? null, 'Sucursal', $avisos
+        );
+        $datos['area_id'] = $this->catalogo(
+            Area::where('activo', true)->pluck('nombre', 'id'), $d['area'] ?? null, 'Área', $avisos
+        );
+
+        if ($tipoTexto = $this->limpio($d['tipo_dispositivo'] ?? null)) {
+            $tipoId = $this->buscarId(TipoDispositivo::where('activo', true)->pluck('nombre', 'id'), $tipoTexto);
+
+            if ($tipoId) {
+                $datos['tipo_dispositivo'] = TipoDispositivo::find($tipoId)?->nombre;
+            } else {
+                $datos['tipo_dispositivo'] = 'Otro';
+                $avisos[] = "Tipo de dispositivo «{$tipoTexto}» no está en el catálogo; se usó «Otro».";
+            }
+        }
+
+        $marcaTexto = $this->limpio($d['marca'] ?? null, 100);
+        $marcaId = $marcaTexto ? $this->buscarId(Marca::activas()->pluck('nombre', 'id'), $marcaTexto) : null;
+        $datos['marca'] = $marcaId ? Marca::find($marcaId)?->nombre : $marcaTexto;
+
+        $datos['modelo'] = $this->limpio($d['modelo'] ?? null, 150);
+        $datos['numero_serie'] = $this->limpio($d['numero_serie'] ?? null, 200);
+        $datos['observaciones'] = $this->limpio($d['observaciones'] ?? null);
+
+        $descripcion = $this->limpio($d['descripcion'] ?? null, 255);
+        $datos['descripcion'] = $descripcion ?: Str::limit(trim(implode(' ', array_filter([$datos['tipo_dispositivo'] ?? null, $datos['marca'], $datos['modelo']]))), 250, '');
+
+        $datos['usuario_referencia'] = $datos['correo_electronico']
+            ?? ($datos['nombre_usuario'] ? Str::lower(str_replace(' ', '.', $datos['nombre_usuario'])) : null);
 
         return ['datos' => $this->sinVacios($datos), 'avisos' => $avisos];
     }

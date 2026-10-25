@@ -30,6 +30,8 @@ class EntregaDispositivo extends Model
         'numero_serie',
         'observaciones',
         'responsiva_pdf',
+        'origen_registro',
+        'estado_revision',
     ];
 
     protected $casts = [

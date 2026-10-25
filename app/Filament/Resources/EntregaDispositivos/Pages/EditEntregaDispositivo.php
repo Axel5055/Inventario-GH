@@ -22,4 +22,15 @@ class EditEntregaDispositivo extends EditRecord
             RestoreAction::make(),
         ];
     }
+
+    /**
+     * Guardar desde el panel significa que el personal ya revisó y completó el
+     * registro (incluyendo los que llegaron pendientes por carga masiva).
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $data['estado_revision'] = 'completo';
+
+        return $data;
+    }
 }

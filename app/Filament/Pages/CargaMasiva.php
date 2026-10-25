@@ -2,8 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\EntregaDispositivos\EntregaDispositivoResource;
 use App\Filament\Resources\EquipoCelulars\EquipoCelularResource;
 use App\Filament\Resources\EquipoComputos\EquipoComputoResource;
+use App\Models\EntregaDispositivo;
 use App\Models\EquipoCelular;
 use App\Models\EquipoComputo;
 use App\Services\CargaMasivaRegistros;
@@ -83,6 +85,13 @@ class CargaMasiva extends Page implements HasSchemas
                 ->color('gray')
                 ->visible(fn () => array_key_exists(ExtractorResponsivaPdf::TIPO_CELULAR, $permitidos))
                 ->action(fn () => app(ExcelRegistros::class)->plantilla(ExtractorResponsivaPdf::TIPO_CELULAR)),
+
+            Action::make('plantillaDispositivos')
+                ->label('Plantilla Excel · Dispositivos')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->visible(fn () => array_key_exists(ExtractorResponsivaPdf::TIPO_DISPOSITIVOS, $permitidos))
+                ->action(fn () => app(ExcelRegistros::class)->plantilla(ExtractorResponsivaPdf::TIPO_DISPOSITIVOS)),
         ];
     }
 
@@ -292,7 +301,11 @@ class CargaMasiva extends Page implements HasSchemas
 
     public function urlPendientes(): string
     {
-        $recurso = $this->tipoProceso === ExtractorResponsivaPdf::TIPO_CELULAR ? EquipoCelularResource::class : EquipoComputoResource::class;
+        $recurso = match ($this->tipoProceso) {
+            ExtractorResponsivaPdf::TIPO_CELULAR => EquipoCelularResource::class,
+            ExtractorResponsivaPdf::TIPO_DISPOSITIVOS => EntregaDispositivoResource::class,
+            default => EquipoComputoResource::class,
+        };
 
         return $recurso::getUrl('index', ['tableFilters' => ['estado_revision' => ['value' => 'pendiente']]]);
     }
@@ -309,6 +322,7 @@ class CargaMasiva extends Page implements HasSchemas
         return collect([
             ExtractorResponsivaPdf::TIPO_COMPUTO => ['Equipos de Cómputo', EquipoComputo::class],
             ExtractorResponsivaPdf::TIPO_CELULAR => ['Equipos Móviles', EquipoCelular::class],
+            ExtractorResponsivaPdf::TIPO_DISPOSITIVOS => ['Dispositivos Externos', EntregaDispositivo::class],
         ])
             ->filter(fn ($def) => $usuario?->can('create', $def[1]))
             ->map(fn ($def) => $def[0])

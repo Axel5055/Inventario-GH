@@ -18,6 +18,8 @@ class ExtractorResponsivaPdf
 
     public const TIPO_CELULAR = 'celular';
 
+    public const TIPO_DISPOSITIVOS = 'dispositivos';
+
     /**
      * @return array<string, mixed>
      */
@@ -194,9 +196,11 @@ class ExtractorResponsivaPdf
 
     private function instrucciones(string $tipo, bool $varios = false): string
     {
-        $documento = $tipo === self::TIPO_CELULAR
-            ? 'una carta responsiva de resguardo de equipo móvil/celular'
-            : 'un formato de entrega de equipo de cómputo';
+        $documento = match ($tipo) {
+            self::TIPO_CELULAR => 'una carta responsiva de resguardo de equipo móvil/celular',
+            self::TIPO_DISPOSITIVOS => 'un formato de entrega o devolución de un dispositivo externo o accesorio (disco duro, cable, monitor, mouse, teclado, tablet, impresora, punto de venta, etc.)',
+            default => 'un formato de entrega de equipo de cómputo',
+        };
 
         $encabezado = $varios
             ? "Este PDF reúne VARIAS responsivas de Grupo Hunan (cada una es {$documento} y puede ocupar una o más páginas). Devuelve un registro por cada responsiva distinta, en el orden en que aparecen; no mezcles datos de una responsiva con los de otra y no repitas una misma responsiva. Ignora las páginas que no sean una responsiva (portadas, hojas en blanco, anexos)."
@@ -220,7 +224,11 @@ TXT;
      */
     private function esquema(string $tipo): array
     {
-        return $tipo === self::TIPO_CELULAR ? $this->esquemaCelular() : $this->esquemaComputo();
+        return match ($tipo) {
+            self::TIPO_CELULAR => $this->esquemaCelular(),
+            self::TIPO_DISPOSITIVOS => $this->esquemaDispositivos(),
+            default => $this->esquemaComputo(),
+        };
     }
 
     /**
@@ -320,6 +328,37 @@ TXT;
                 'observaciones' => $texto,
             ],
             'required' => ['nombre_colaborador', 'marca', 'modelo', 'imei'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function esquemaDispositivos(): array
+    {
+        $texto = ['type' => ['string', 'null']];
+
+        return [
+            'type' => 'object',
+            'properties' => [
+                'tipo_movimiento' => [
+                    'type' => ['string', 'null'],
+                    'enum' => ['entrega', 'devolucion', null],
+                    'description' => 'Entrega (se le da el dispositivo a la persona) o devolucion (lo regresa).',
+                ],
+                'fecha' => $texto + ['description' => 'Fecha de la entrega o devolución, YYYY-MM-DD.'],
+                'nombre_completo' => $texto + ['description' => 'Persona que recibe o devuelve el dispositivo.'],
+                'correo' => $texto + ['description' => 'Correo electrónico de la persona.'],
+                'area' => $texto + ['description' => 'Área / Departamento.'],
+                'sucursal' => $texto + ['description' => 'Unidad / Sucursal (tal como está escrita).'],
+                'tipo_dispositivo' => $texto + ['description' => 'Qué tipo de dispositivo es (disco duro, cable, monitor, mouse, teclado, tablet, impresora, punto de venta…).'],
+                'descripcion' => $texto + ['description' => 'Descripción del dispositivo tal como está escrita.'],
+                'marca' => $texto,
+                'modelo' => $texto,
+                'numero_serie' => $texto,
+                'observaciones' => $texto,
+            ],
+            'required' => ['nombre_completo', 'descripcion'],
         ];
     }
 }

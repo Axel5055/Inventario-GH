@@ -33,7 +33,7 @@ class CreateEquipoComputo extends CreateRecord
         if ($conflicto) {
             $this->mountAction('confirmarBajaSerieDuplicada', [
                 'conflictoId' => $conflicto->id,
-                'mensaje' => "Ya existe un equipo ACTIVO con este número de serie, asignado a «{$conflicto->nombre_usuario}». ¿Deseas darlo de baja para reutilizar el número en este nuevo registro?",
+                'mensaje' => "Ya existe un equipo ACTIVO con este número de serie, asignado a «{$conflicto->nombre_usuario}»" . ($conflicto->fecha_entrega ? ' (fecha de entrega: ' . $conflicto->fecha_entrega->format('d/m/Y') . ')' : '') . ". ¿Deseas darlo de baja para reutilizar el número en este nuevo registro?",
                 'another' => $another,
             ]);
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Area;
 use App\Models\Marca;
 use App\Models\Sucursal;
+use App\Models\TipoDispositivo;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Support\Str;
@@ -39,6 +40,8 @@ class ExcelRegistros
         ],
     ];
 
+    private const MOVIMIENTOS_DISPOSITIVOS = ['entrega' => 'entrega', 'devolucion' => 'devolucion'];
+
     private const MOVIMIENTOS = [
         'alta' => 'alta', 'baja' => 'baja', 'cambio de equipo' => 'cambio_equipo', 'cambio' => 'cambio_equipo',
         'reasignacion' => 'reasignacion', 'mantenimiento' => 'mantenimiento', 'prestamo temporal' => 'prestamo_temporal',
@@ -59,6 +62,21 @@ class ExcelRegistros
             'Tipo de movimiento' => ['clave' => 'tipo_movimiento', 'obligatoria' => false, 'ayuda' => 'Alta, Baja, Cambio de equipo, Reasignación, Mantenimiento o Préstamo temporal. Vacío = Alta.', 'aliases' => ['movimiento', 'status']],
             'Fecha de entrega' => ['clave' => $fechaClave, 'obligatoria' => false, 'ayuda' => 'Fecha (ej. 25/10/2026). Vacío = hoy.', 'aliases' => ['fecha', 'fecha de movimiento']],
         ];
+
+        if ($tipo === ExtractorResponsivaPdf::TIPO_DISPOSITIVOS) {
+            $columnas = $comunes('nombre_completo', 'area', 'fecha');
+            $columnas['Tipo de movimiento']['ayuda'] = 'Entrega o Devolución. Vacío = Entrega.';
+
+            return $columnas + [
+                'Correo' => ['clave' => 'correo', 'obligatoria' => false, 'ayuda' => 'Correo de la persona.', 'aliases' => ['correo electronico', 'email', 'e-mail']],
+                'Tipo de dispositivo' => ['clave' => 'tipo_dispositivo', 'obligatoria' => false, 'ayuda' => 'Como está en el catálogo (hoja Catálogos). Si no existe se usa «Otro».', 'aliases' => ['tipo']],
+                'Descripción' => ['clave' => 'descripcion', 'obligatoria' => false, 'ayuda' => 'Ej. Disco duro externo 1 TB.', 'aliases' => ['descripcion del dispositivo', 'dispositivo', 'detalle']],
+                'Marca' => ['clave' => 'marca', 'obligatoria' => false, 'ayuda' => 'Como está en el catálogo de marcas.', 'aliases' => []],
+                'Modelo' => ['clave' => 'modelo', 'obligatoria' => false, 'ayuda' => '', 'aliases' => []],
+                'Número de serie' => ['clave' => 'numero_serie', 'obligatoria' => false, 'ayuda' => 'Opcional. En dispositivos no se revisan repetidos.', 'aliases' => ['serie', 'no de serie', 'sn']],
+                'Observaciones' => ['clave' => 'observaciones', 'obligatoria' => false, 'ayuda' => '', 'aliases' => ['notas', 'comentarios']],
+            ];
+        }
 
         if ($tipo === ExtractorResponsivaPdf::TIPO_CELULAR) {
             return $comunes('nombre_colaborador', 'puesto_area', 'fecha') + [
@@ -94,10 +112,11 @@ class ExcelRegistros
     public function plantilla(string $tipo): StreamedResponse
     {
         $celular = $tipo === ExtractorResponsivaPdf::TIPO_CELULAR;
+        $dispositivos = $tipo === ExtractorResponsivaPdf::TIPO_DISPOSITIVOS;
         $columnas = $this->columnas($tipo);
         $negrita = (new Style())->setFontBold();
 
-        return response()->streamDownload(function () use ($columnas, $celular, $tipo, $negrita) {
+        return response()->streamDownload(function () use ($columnas, $celular, $dispositivos, $tipo, $negrita) {
             $opciones = new WriterOptions();
             $opciones->setColumnWidthForRange(24, 1, 20);
 
@@ -110,7 +129,9 @@ class ExcelRegistros
             $writer->addNewSheetAndMakeItCurrent()->setName('Instrucciones');
             $writer->addRow(Row::fromValues(['Cómo llenar la hoja «Datos»'], $negrita));
             $writer->addRow(Row::fromValues(['Una fila por equipo. No cambies los encabezados. Lo que dejes vacío se completa después en la revisión; solo «Nombre completo» es necesario.']));
-            $writer->addRow(Row::fromValues(['Los registros se crean como «pendientes» para que los revises y valides. Si el equipo ya está activo en el sistema (mismo ' . ($celular ? 'teléfono o IMEI' : 'número de serie') . ', o mismo nombre y modelo), esa fila se crea igual pero como BAJA y pendiente, con la advertencia en Observaciones.']));
+            $writer->addRow(Row::fromValues([$dispositivos
+                ? 'Los registros se crean como «pendientes» para que los revises y valides. En Dispositivos Externos no se revisan repetidos: puedes registrar varios dispositivos para la misma persona.'
+                : 'Los registros se crean como «pendientes» para que los revises y valides. Si el equipo ya está activo en el sistema (mismo ' . ($celular ? 'teléfono o IMEI' : 'número de serie') . ', o mismo nombre y modelo), esa fila se crea igual pero como BAJA y pendiente, con la advertencia en Observaciones.']));
             $writer->addRow(Row::fromValues([]));
             $writer->addRow(Row::fromValues(['Columna', 'Obligatoria', 'Qué poner'], $negrita));
             foreach ($columnas as $etiqueta => $def) {
@@ -121,15 +142,19 @@ class ExcelRegistros
             $listas = [
                 'Sucursales' => Sucursal::where('activo', true)->orderBy('nombre')->pluck('nombre')->all(),
                 'Áreas' => Area::where('activo', true)->orderBy('nombre')->pluck('nombre')->all(),
-                'Marcas' => ($celular ? Marca::activas()->deCelular() : Marca::activas()->deComputo())->orderBy('nombre')->pluck('nombre')->all(),
+                'Marcas' => ($dispositivos ? Marca::activas() : ($celular ? Marca::activas()->deCelular() : Marca::activas()->deComputo()))->orderBy('nombre')->pluck('nombre')->all(),
             ];
+
+            if ($dispositivos) {
+                $listas['Tipos de dispositivo'] = TipoDispositivo::where('activo', true)->orderBy('nombre')->pluck('nombre')->all();
+            }
             $writer->addRow(Row::fromValues(array_keys($listas), $negrita));
             for ($i = 0, $max = max(array_map('count', $listas)); $i < $max; $i++) {
                 $writer->addRow(Row::fromValues(array_map(fn ($lista) => $lista[$i] ?? '', array_values($listas))));
             }
 
             $writer->close();
-        }, 'plantilla-carga-masiva-' . ($celular ? 'moviles' : 'computo') . '.xlsx', [
+        }, 'plantilla-carga-masiva-' . ($dispositivos ? 'dispositivos' : ($celular ? 'moviles' : 'computo')) . '.xlsx', [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
@@ -220,7 +245,8 @@ class ExcelRegistros
         }
 
         if (isset($datos['tipo_movimiento'])) {
-            $datos['tipo_movimiento'] = self::MOVIMIENTOS[$this->normalizar($datos['tipo_movimiento'])] ?? null;
+            $mapa = $tipo === ExtractorResponsivaPdf::TIPO_DISPOSITIVOS ? self::MOVIMIENTOS_DISPOSITIVOS : self::MOVIMIENTOS;
+            $datos['tipo_movimiento'] = $mapa[$this->normalizar($datos['tipo_movimiento'])] ?? null;
         }
 
         foreach (['fecha', 'fecha_movimiento'] as $clave) {

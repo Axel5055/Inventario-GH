@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Filament\Resources\EquipoCelulars\Schemas\EquipoCelularForm;
 use App\Filament\Resources\EquipoComputos\Schemas\EquipoComputoForm;
+use App\Models\EntregaDispositivo;
 use App\Models\EquipoCelular;
 use App\Models\EquipoComputo;
 use App\Models\Marca;
@@ -13,7 +14,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Carga masiva de equipos de cómputo o móviles a partir de responsivas (PDF,
+ * Carga masiva de equipos de cómputo, móviles o dispositivos externos a partir de responsivas (PDF,
  * escaneo o foto) leídas con IA. Todo se crea como "pendiente" de revisión
  * (igual que el formulario público): lo que la IA no logra leer queda vacío y
  * se anota en Observaciones para que el personal lo complete y valide.
@@ -133,21 +134,25 @@ class CargaMasivaRegistros
     private function crear(string $tipo, array $crudo, string $origen, ?string $adjunto): array
     {
         $celular = $tipo === ExtractorResponsivaPdf::TIPO_CELULAR;
+        $dispositivos = $tipo === ExtractorResponsivaPdf::TIPO_DISPOSITIVOS;
         ['datos' => $d, 'avisos' => $avisos] = $this->mapeador->mapear($crudo, $tipo);
 
-        $identificadores = $celular
-            ? ['nombre_usuario', 'imei', 'modelo', 'numero_telefonico']
-            : ['nombre_usuario', 'numero_serie', 'modelo', 'correo_electronico'];
+        $identificadores = match (true) {
+            $celular => ['nombre_usuario', 'imei', 'modelo', 'numero_telefonico'],
+            $dispositivos => ['nombre_usuario', 'descripcion', 'modelo', 'numero_serie', 'correo_electronico'],
+            default => ['nombre_usuario', 'numero_serie', 'modelo', 'correo_electronico'],
+        };
 
         if (collect($identificadores)->every(fn ($campo) => blank($d[$campo] ?? null))) {
             return $this->fila($origen, 'omitido', null, 'No se detectó información de una responsiva.');
         }
 
-        $d['tipo_movimiento'] ??= 'alta';
+        $d['tipo_movimiento'] ??= $dispositivos ? 'entrega' : 'alta';
 
         // Si ya hay un registro activo que coincide, este se crea igual pero como BAJA y
         // pendiente de revisar: no se toca el registro existente ni se pierde el documento.
-        $duplicado = $d['tipo_movimiento'] === 'baja' ? null : $this->buscarDuplicado($celular, $d);
+        // En Dispositivos Externos no se revisan repetidos: una persona puede recibir varios iguales.
+        $duplicado = ($dispositivos || $d['tipo_movimiento'] === 'baja') ? null : $this->buscarDuplicado($celular, $d);
 
         if ($duplicado) {
             $d['tipo_movimiento'] = 'baja';
@@ -164,11 +169,13 @@ class CargaMasivaRegistros
             }
         };
 
-        foreach ([
-            'sucursal_id' => 'Sucursal', 'area_id' => 'Área', 'marca_id' => 'Marca', 'modelo' => 'Modelo',
-        ] + ($celular
-            ? ['imei' => 'IMEI', 'numero_telefonico' => 'Número telefónico', 'tipo_equipo' => 'Tipo de equipo']
-            : ['numero_serie' => 'Número de serie', 'correo_electronico' => 'Correo', 'tipo_equipo' => 'Tipo de equipo']) as $campo => $etiqueta) {
+        $obligatorios = $dispositivos
+            ? ['sucursal_id' => 'Sucursal', 'area_id' => 'Área', 'correo_electronico' => 'Correo', 'tipo_dispositivo' => 'Tipo de dispositivo', 'descripcion' => 'Descripción']
+            : ['sucursal_id' => 'Sucursal', 'area_id' => 'Área', 'marca_id' => 'Marca', 'modelo' => 'Modelo'] + ($celular
+                ? ['imei' => 'IMEI', 'numero_telefonico' => 'Número telefónico', 'tipo_equipo' => 'Tipo de equipo']
+                : ['numero_serie' => 'Número de serie', 'correo_electronico' => 'Correo', 'tipo_equipo' => 'Tipo de equipo']);
+
+        foreach ($obligatorios as $campo => $etiqueta) {
             $revisar($campo, $etiqueta);
         }
 
@@ -177,14 +184,21 @@ class CargaMasivaRegistros
             $faltantes[] = 'Nombre';
         }
 
-        $d['fecha_entrega'] ??= now()->format('Y-m-d H:i:s');
-        $d['tipo_equipo'] ??= $celular ? 'celular' : 'laptop';
-        $d['modelo'] ??= '';
-
-        if (! $celular) {
+        if ($dispositivos) {
+            $d['fecha_entrega'] ??= now()->format('Y-m-d');
+            $d['tipo_dispositivo'] ??= 'Otro';
+            $d['descripcion'] ??= '(sin descripción)';
             $d['correo_electronico'] ??= '';
-            $d['numero_serie'] ??= '';
-            $this->resolverMarcaComputo($d, $crudo['marca'] ?? null);
+        } else {
+            $d['fecha_entrega'] ??= now()->format('Y-m-d H:i:s');
+            $d['tipo_equipo'] ??= $celular ? 'celular' : 'laptop';
+            $d['modelo'] ??= '';
+
+            if (! $celular) {
+                $d['correo_electronico'] ??= '';
+                $d['numero_serie'] ??= '';
+                $this->resolverMarcaComputo($d, $crudo['marca'] ?? null);
+            }
         }
 
         if ($esBaja) {
@@ -203,10 +217,14 @@ class CargaMasivaRegistros
         $d['origen_registro'] = 'masivo';
         $d['estado_revision'] = 'pendiente';
 
-        $modelo = $celular ? EquipoCelular::class : EquipoComputo::class;
+        $modelo = match (true) {
+            $celular => EquipoCelular::class,
+            $dispositivos => EntregaDispositivo::class,
+            default => EquipoComputo::class,
+        };
 
         if ($adjunto) {
-            $d['responsiva_pdf'] = $this->adjuntar($adjunto, $d['nombre_usuario'], $celular);
+            $d['responsiva_pdf'] = $this->adjuntar($adjunto, $d['nombre_usuario'], $tipo);
         }
 
         $registro = $modelo::create($d);
@@ -275,9 +293,15 @@ class CargaMasivaRegistros
     /**
      * Mueve el PDF subido a la carpeta de responsivas con el nombre de la persona.
      */
-    private function adjuntar(string $rutaTemporal, string $nombre, bool $celular): string
+    private function adjuntar(string $rutaTemporal, string $nombre, string $tipo): string
     {
-        $destino = ($celular ? 'responsivas/celulares/' : 'responsivas/computo/') . Str::slug($nombre ?: 'equipo') . '-' . Str::random(6) . '.pdf';
+        $carpeta = match ($tipo) {
+            ExtractorResponsivaPdf::TIPO_CELULAR => 'responsivas/celulares/',
+            ExtractorResponsivaPdf::TIPO_DISPOSITIVOS => 'responsivas/dispositivos/',
+            default => 'responsivas/computo/',
+        };
+
+        $destino = $carpeta . Str::slug($nombre ?: 'equipo') . '-' . Str::random(6) . '.pdf';
 
         Storage::disk('local')->move($rutaTemporal, $destino);
 

@@ -22,6 +22,13 @@ class EntregaDispositivosTable
     {
         return $table
             ->columns([
+                TextColumn::make('estado_revision')
+                    ->label('Revisión')
+                    ->badge()
+                    ->color(fn($state) => $state === 'pendiente' ? 'warning' : 'success')
+                    ->formatStateUsing(fn($state) => $state === 'pendiente' ? '🟡 Pendiente' : '✅ Completo')
+                    ->toggleable(),
+
                 TextColumn::make('tipo_movimiento')
                     ->label('Movimiento')
                     ->badge()
@@ -87,6 +94,13 @@ class EntregaDispositivosTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('estado_revision')
+                    ->label('Revisión')
+                    ->options(OpcionesOrdenadas::alfabetico([
+                        'pendiente' => '🟡 Pendiente',
+                        'completo'  => '✅ Completo',
+                    ])),
+
                 SelectFilter::make('tipo_movimiento')
                     ->label('Tipo de Movimiento')
                     ->options(OpcionesOrdenadas::alfabetico([

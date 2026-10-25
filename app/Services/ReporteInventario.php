@@ -278,6 +278,8 @@ class ReporteInventario
                 'Marca' => fn ($r) => $r->marca,
                 'Modelo' => fn ($r) => $r->modelo,
                 'No. de serie' => fn ($r) => $r->numero_serie,
+                'Origen del registro' => fn ($r) => self::ORIGENES[$r->origen_registro] ?? 'Administración',
+                'Revisión' => fn ($r) => $r->estado_revision === 'pendiente' ? 'Pendiente' : 'Completo',
                 'Observaciones' => fn ($r) => $r->observaciones,
                 'Registrado el' => fn ($r) => $this->fecha($r->created_at, true),
             ],
