@@ -25,12 +25,12 @@ class EditEquipoComputo extends EditRecord
             ForceDeleteAction::make(),
             RestoreAction::make(),
             EquipoComputoForm::confirmarBajaSerieDuplicadaAction(),
-            EquipoComputoForm::confirmarMismoNombreAction(),
+            EquipoComputoForm::confirmarMismoCorreoAction(),
         ];
     }
 
-    /** true cuando el usuario ya decidió qué hacer con los equipos de la misma persona. */
-    public bool $nombreConfirmado = false;
+    /** true cuando el usuario ya decidió qué hacer con los equipos del mismo correo. */
+    public bool $correoConfirmado = false;
 
     public function save(bool $shouldRedirect = true, bool $shouldSendSavedNotification = true): void
     {
@@ -50,16 +50,16 @@ class EditEquipoComputo extends EditRecord
 
         // Misma persona con equipo activo: se pregunta si se da de baja, pero el
         // registro se guarda en cualquier caso (se valida antes de preguntar).
-        if (! $this->nombreConfirmado && EquipoComputoForm::mismoNombreDe($this)->isNotEmpty()) {
+        if (! $this->correoConfirmado && EquipoComputoForm::mismoCorreoDe($this)->isNotEmpty()) {
             $this->form->validate();
-            $this->mountAction('confirmarMismoNombre');
+            $this->mountAction('confirmarMismoCorreo');
 
             return;
         }
 
         parent::save($shouldRedirect, $shouldSendSavedNotification);
 
-        $this->nombreConfirmado = false;
+        $this->correoConfirmado = false;
     }
 
     /**

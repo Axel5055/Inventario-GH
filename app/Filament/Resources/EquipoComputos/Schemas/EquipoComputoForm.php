@@ -509,36 +509,29 @@ class EquipoComputoForm
     }
 
     /**
-     * Registros ACTIVOS (tipo_movimiento distinto de 'baja') de la misma persona.
-     * Una persona puede tener más de un equipo, así que esto no impide guardar:
-     * solo permite elegir si el equipo anterior se da de baja.
+     * Otros registros ACTIVOS (tipo_movimiento distinto de 'baja') con el mismo
+     * correo electrónico, que identifica a la persona. Una persona puede tener más
+     * de un equipo, así que esto no impide guardar: en cada guardado (alta o
+     * edición) permite elegir si los otros equipos se dan de baja.
      *
-     * Si el registro que se guarda es una baja no hay nada que preguntar. Al editar
-     * solo se pregunta si cambió el nombre (o si el registro dejó de ser baja), para
-     * no preguntar en cada edición de quien ya tiene dos equipos.
+     * Si el registro que se guarda es una baja no hay nada que preguntar. El propio
+     * registro que se edita nunca cuenta como coincidencia.
      *
      * @param  array<string, mixed>  $data  estado del formulario
      * @return Collection<int, EquipoComputo>
      */
-    public static function buscarMismoNombre(array $data, ?EquipoComputo $record): Collection
+    public static function buscarMismoCorreo(array $data, ?EquipoComputo $record): Collection
     {
-        $nombre = trim((string) ($data['nombre_usuario'] ?? ''));
+        $correo = trim((string) ($data['correo_electronico'] ?? ''));
 
-        if ($nombre === '' || ($data['tipo_movimiento'] ?? null) === 'baja') {
+        if ($correo === '' || ($data['tipo_movimiento'] ?? null) === 'baja') {
             return collect();
         }
 
-        $cambio = ! $record
-            || Str::lower(trim($record->nombre_usuario)) !== Str::lower($nombre)
-            || $record->tipo_movimiento === 'baja';
-
-        if (! $cambio) {
-            return collect();
-        }
-
+        // La comparación usa la collation de la base: no distingue mayúsculas.
         return EquipoComputo::query()
             ->with('marca')
-            ->where('nombre_usuario', $nombre)
+            ->where('correo_electronico', $correo)
             ->where('tipo_movimiento', '!=', 'baja')
             ->when($record, fn ($query) => $query->whereKeyNot($record->getKey()))
             ->orderBy('id')
@@ -548,11 +541,11 @@ class EquipoComputoForm
     /**
      * @return Collection<int, EquipoComputo>
      */
-    public static function mismoNombreDe($livewire): Collection
+    public static function mismoCorreoDe($livewire): Collection
     {
         $record = $livewire instanceof EditRecord ? $livewire->getRecord() : null;
 
-        return self::buscarMismoNombre($livewire->data ?? [], $record);
+        return self::buscarMismoCorreo($livewire->data ?? [], $record);
     }
 
     /**
@@ -574,13 +567,13 @@ class EquipoComputoForm
      * SIEMPRE. Los equipos se vuelven a calcular al confirmar, no se confía en
      * lo que envía el navegador.
      */
-    public static function confirmarMismoNombreAction(): Action
+    public static function confirmarMismoCorreoAction(): Action
     {
-        return Action::make('confirmarMismoNombre')
+        return Action::make('confirmarMismoCorreo')
             ->extraAttributes(['style' => 'display: none;'])
-            ->modalHeading('Este usuario ya tiene equipo activo')
+            ->modalHeading('Este correo ya tiene equipo activo')
             ->modalDescription(fn ($livewire): HtmlString => new HtmlString(
-                '<p>«' . e(trim((string) ($livewire->data['nombre_usuario'] ?? ''))) . '» ya tiene registrado(s) equipo(s) de cómputo activo(s). '
+                '<p>El correo «' . e(trim((string) ($livewire->data['correo_electronico'] ?? ''))) . '» ya tiene registrado(s) otro(s) equipo(s) de cómputo activo(s). '
                 . 'Una persona puede tener más de uno: marca solo los que quieras <b>dar de baja</b>. '
                 . 'Si no marcas ninguno, se conservan todos. El registro que estás guardando se guarda de todos modos.</p>'
             ))
@@ -592,14 +585,14 @@ class EquipoComputoForm
             ->form(fn ($livewire): array => [
                 CheckboxList::make('bajas')
                     ->label('¿Cuáles equipos anteriores se dan de baja?')
-                    ->options(self::mismoNombreDe($livewire)->mapWithKeys(fn (EquipoComputo $e) => [$e->id => self::descripcionEquipo($e)])->all())
+                    ->options(self::mismoCorreoDe($livewire)->mapWithKeys(fn (EquipoComputo $e) => [$e->id => self::descripcionEquipo($e)])->all())
                     ->live(),
 
                 ResponsivaBaja::subida('responsiva_baja', 'responsivas/baja-computo')
                     ->visible(fn ($get) => filled($get('bajas'))),
             ])
             ->action(function (array $data, array $arguments, $livewire) {
-                $permitidos = self::mismoNombreDe($livewire)->keyBy('id');
+                $permitidos = self::mismoCorreoDe($livewire)->keyBy('id');
 
                 foreach ((array) ($data['bajas'] ?? []) as $id) {
                     $equipo = $permitidos->get((int) $id);
@@ -611,7 +604,7 @@ class EquipoComputoForm
                 }
 
                 // Ya se decidió: al reintentar el guardado no se vuelve a preguntar.
-                $livewire->nombreConfirmado = true;
+                $livewire->correoConfirmado = true;
 
                 if (method_exists($livewire, 'create')) {
                     $livewire->create($arguments['another'] ?? false);
