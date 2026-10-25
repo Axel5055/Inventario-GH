@@ -28,7 +28,7 @@ class CreateEquipoComputo extends CreateRecord
 
     public function create(bool $another = false): void
     {
-        $conflicto = EquipoComputoForm::buscarConflictoNumeroSerie($this->data['numero_serie'] ?? null, null);
+        $conflicto = EquipoComputoForm::buscarConflictoNumeroSerie($this->data['numero_serie'] ?? null, null, $this->data['tipo_movimiento'] ?? null);
 
         if ($conflicto) {
             $this->mountAction('confirmarBajaSerieDuplicada', [

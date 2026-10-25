@@ -37,7 +37,7 @@ class EditEquipoComputo extends EditRecord
         /** @var EquipoComputo $record */
         $record = $this->getRecord();
 
-        $conflicto = EquipoComputoForm::buscarConflictoNumeroSerie($this->data['numero_serie'] ?? null, $record);
+        $conflicto = EquipoComputoForm::buscarConflictoNumeroSerie($this->data['numero_serie'] ?? null, $record, $this->data['tipo_movimiento'] ?? null);
 
         if ($conflicto) {
             $this->mountAction('confirmarBajaSerieDuplicada', [

@@ -454,11 +454,12 @@ class EquipoComputoForm
     /**
      * Un mismo número de serie es válido en varios registros históricos
      * (equipo reciclado a otra persona), pero solo uno puede estar activo
-     * (tipo_movimiento distinto de 'baja') a la vez.
+     * (tipo_movimiento distinto de 'baja') a la vez. Si el registro que se
+     * guarda queda en 'baja' no ocupa el número, así que no hay conflicto.
      */
-    public static function buscarConflictoNumeroSerie(?string $numeroSerie, ?EquipoComputo $record): ?EquipoComputo
+    public static function buscarConflictoNumeroSerie(?string $numeroSerie, ?EquipoComputo $record, ?string $tipoMovimiento = null): ?EquipoComputo
     {
-        if (blank($numeroSerie)) {
+        if (blank($numeroSerie) || $tipoMovimiento === 'baja') {
             return null;
         }
 
