@@ -19,8 +19,12 @@ class CreateEquipoComputo extends CreateRecord
             CargarDesdePdfAction::make(ExtractorResponsivaPdf::TIPO_COMPUTO),
             CargarInfoEquipoAction::make(),
             EquipoComputoForm::confirmarBajaSerieDuplicadaAction(),
+            EquipoComputoForm::confirmarMismoNombreAction(),
         ];
     }
+
+    /** true cuando el usuario ya decidió qué hacer con los equipos de la misma persona. */
+    public bool $nombreConfirmado = false;
 
     public function create(bool $another = false): void
     {
@@ -36,6 +40,17 @@ class CreateEquipoComputo extends CreateRecord
             return;
         }
 
+        // Misma persona con equipo activo: se pregunta si se da de baja, pero el
+        // registro se guarda en cualquier caso (se valida antes de preguntar).
+        if (! $this->nombreConfirmado && EquipoComputoForm::mismoNombreDe($this)->isNotEmpty()) {
+            $this->form->validate();
+            $this->mountAction('confirmarMismoNombre', ['another' => $another]);
+
+            return;
+        }
+
         parent::create($another);
+
+        $this->nombreConfirmado = false;
     }
 }

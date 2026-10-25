@@ -25,6 +25,10 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class EquipoComputoForm
@@ -495,6 +499,119 @@ class EquipoComputoForm
                         'fecha_baja' => now(),
                     ] + (filled($data['responsiva_baja'] ?? null) ? ['responsiva_baja_pdf' => $data['responsiva_baja']] : []));
                 }
+
+                if (method_exists($livewire, 'create')) {
+                    $livewire->create($arguments['another'] ?? false);
+                } elseif (method_exists($livewire, 'save')) {
+                    $livewire->save();
+                }
+            });
+    }
+
+    /**
+     * Registros ACTIVOS (tipo_movimiento distinto de 'baja') de la misma persona.
+     * Una persona puede tener más de un equipo, así que esto no impide guardar:
+     * solo permite elegir si el equipo anterior se da de baja.
+     *
+     * Si el registro que se guarda es una baja no hay nada que preguntar. Al editar
+     * solo se pregunta si cambió el nombre (o si el registro dejó de ser baja), para
+     * no preguntar en cada edición de quien ya tiene dos equipos.
+     *
+     * @param  array<string, mixed>  $data  estado del formulario
+     * @return Collection<int, EquipoComputo>
+     */
+    public static function buscarMismoNombre(array $data, ?EquipoComputo $record): Collection
+    {
+        $nombre = trim((string) ($data['nombre_usuario'] ?? ''));
+
+        if ($nombre === '' || ($data['tipo_movimiento'] ?? null) === 'baja') {
+            return collect();
+        }
+
+        $cambio = ! $record
+            || Str::lower(trim($record->nombre_usuario)) !== Str::lower($nombre)
+            || $record->tipo_movimiento === 'baja';
+
+        if (! $cambio) {
+            return collect();
+        }
+
+        return EquipoComputo::query()
+            ->with('marca')
+            ->where('nombre_usuario', $nombre)
+            ->where('tipo_movimiento', '!=', 'baja')
+            ->when($record, fn ($query) => $query->whereKeyNot($record->getKey()))
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * @return Collection<int, EquipoComputo>
+     */
+    public static function mismoNombreDe($livewire): Collection
+    {
+        $record = $livewire instanceof EditRecord ? $livewire->getRecord() : null;
+
+        return self::buscarMismoNombre($livewire->data ?? [], $record);
+    }
+
+    /**
+     * Descripción corta de un equipo para las listas de elección.
+     */
+    private static function descripcionEquipo(EquipoComputo $equipo): string
+    {
+        $detalle = trim(($equipo->marca?->nombre ?? '') . ' ' . $equipo->modelo);
+        $serie = filled($equipo->numero_serie) ? 'serie ' . $equipo->numero_serie : 'sin serie';
+        $fecha = $equipo->fecha_entrega?->format('d/m/Y');
+
+        return trim($detalle . ' — ' . $serie . ($fecha ? ' — entregado el ' . $fecha : ''), ' —');
+    }
+
+    /**
+     * Acción oculta, como la de número de serie: se monta al guardar cuando la
+     * persona ya tiene equipos activos. El usuario marca cuáles dar de baja (si
+     * no marca ninguno, se conservan todos) y el registro en curso se guarda
+     * SIEMPRE. Los equipos se vuelven a calcular al confirmar, no se confía en
+     * lo que envía el navegador.
+     */
+    public static function confirmarMismoNombreAction(): Action
+    {
+        return Action::make('confirmarMismoNombre')
+            ->extraAttributes(['style' => 'display: none;'])
+            ->modalHeading('Este usuario ya tiene equipo activo')
+            ->modalDescription(fn ($livewire): HtmlString => new HtmlString(
+                '<p>«' . e(trim((string) ($livewire->data['nombre_usuario'] ?? ''))) . '» ya tiene registrado(s) equipo(s) de cómputo activo(s). '
+                . 'Una persona puede tener más de uno: marca solo los que quieras <b>dar de baja</b>. '
+                . 'Si no marcas ninguno, se conservan todos. El registro que estás guardando se guarda de todos modos.</p>'
+            ))
+            ->modalIcon('heroicon-o-question-mark-circle')
+            ->modalIconColor('warning')
+            ->modalSubmitActionLabel('Guardar')
+            ->modalCancelActionLabel('Cancelar, no guardar')
+            ->color('warning')
+            ->form(fn ($livewire): array => [
+                CheckboxList::make('bajas')
+                    ->label('¿Cuáles equipos anteriores se dan de baja?')
+                    ->options(self::mismoNombreDe($livewire)->mapWithKeys(fn (EquipoComputo $e) => [$e->id => self::descripcionEquipo($e)])->all())
+                    ->live(),
+
+                ResponsivaBaja::subida('responsiva_baja', 'responsivas/baja-computo')
+                    ->visible(fn ($get) => filled($get('bajas'))),
+            ])
+            ->action(function (array $data, array $arguments, $livewire) {
+                $permitidos = self::mismoNombreDe($livewire)->keyBy('id');
+
+                foreach ((array) ($data['bajas'] ?? []) as $id) {
+                    $equipo = $permitidos->get((int) $id);
+
+                    $equipo?->update([
+                        'tipo_movimiento' => 'baja',
+                        'fecha_baja' => now(),
+                    ] + (filled($data['responsiva_baja'] ?? null) ? ['responsiva_baja_pdf' => $data['responsiva_baja']] : []));
+                }
+
+                // Ya se decidió: al reintentar el guardado no se vuelve a preguntar.
+                $livewire->nombreConfirmado = true;
 
                 if (method_exists($livewire, 'create')) {
                     $livewire->create($arguments['another'] ?? false);
