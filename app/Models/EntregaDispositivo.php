@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\RegistraActividad;
+use App\Models\Concerns\RegistraAutor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EntregaDispositivo extends Model
 {
-    use SoftDeletes, RegistraActividad;
+    use SoftDeletes, RegistraActividad, RegistraAutor;
 
     protected $table = 'entregas_dispositivos';
 

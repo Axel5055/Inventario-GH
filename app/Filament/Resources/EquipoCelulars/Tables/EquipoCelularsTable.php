@@ -102,6 +102,12 @@ class EquipoCelularsTable
 
                 TextColumn::make('iccid')
                     ->searchable(),
+                TextColumn::make('creadoPor.name')
+                    ->label('Registrado por')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('actualizadoPor.name')
+                    ->label('Editado por')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('estado_revision')

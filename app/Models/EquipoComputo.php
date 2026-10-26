@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\RegistraActividad;
+use App\Models\Concerns\RegistraAutor;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EquipoComputo extends Model
 {
-    use SoftDeletes, RegistraActividad;
+    use SoftDeletes, RegistraActividad, RegistraAutor;
 
     protected $table = 'equipos_computo';
 

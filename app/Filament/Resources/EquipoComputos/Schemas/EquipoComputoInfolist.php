@@ -625,11 +625,21 @@ class EquipoComputoInfolist
                                         ->dateTime('d/m/Y H:i')
                                         ->placeholder('—'),
 
+                                    TextEntry::make('registrado_por')
+                                        ->label('Registrado por')
+                                        ->icon('heroicon-o-user-plus')
+                                        ->state(fn ($record) => $record->etiquetaRegistradoPor()),
+
                                     TextEntry::make('updated_at')
                                         ->label('Última Actualización')
                                         ->icon('heroicon-o-pencil-square')
                                         ->dateTime('d/m/Y H:i')
                                         ->placeholder('—'),
+
+                                    TextEntry::make('editado_por')
+                                        ->label('Última edición por')
+                                        ->icon('heroicon-o-user')
+                                        ->state(fn ($record) => $record->etiquetaEditadoPor()),
 
                                     TextEntry::make('deleted_at')
                                         ->label('Eliminado el')
