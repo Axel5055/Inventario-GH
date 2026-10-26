@@ -7,6 +7,7 @@ use App\Models\EquipoComputo;
 use App\Models\Marca;
 use App\Models\Sucursal;
 use App\Services\InfoEquipoParser;
+use App\Support\OpcionesOrdenadas;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -318,12 +319,10 @@ class RegistroEquipoComputo extends Component
     public function render()
     {
         return view('livewire.registro-equipo-computo', [
-            'sucursales' => Sucursal::where('activo', true)->orderBy('nombre')->pluck('nombre', 'id'),
-            'areas' => Area::where('activo', true)->orderBy('nombre')->pluck('nombre', 'id'),
-            'marcas' => Marca::activas()->deComputo()
-                ->orderByRaw("(nombre = 'Otra') asc")
-                ->orderBy('nombre')
-                ->pluck('nombre', 'id'),
+            // N/A al inicio, «Otro/Otra» al final y el resto en orden alfabético.
+            'sucursales' => OpcionesOrdenadas::alfabetico(Sucursal::where('activo', true)->pluck('nombre', 'id')),
+            'areas' => OpcionesOrdenadas::alfabetico(Area::where('activo', true)->pluck('nombre', 'id')),
+            'marcas' => OpcionesOrdenadas::alfabetico(Marca::activas()->deComputo()->pluck('nombre', 'id')),
         ]);
     }
 }

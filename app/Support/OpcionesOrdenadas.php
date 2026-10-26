@@ -7,8 +7,10 @@ use Illuminate\Support\Str;
 
 /**
  * Ordena las opciones de un select alfabéticamente por su etiqueta (sin
- * distinguir mayúsculas, acentos ni emojis del inicio) y deja al final las
- * opciones comodín: "Otro", "Otra", "Otros", "Otras" (con o sin texto extra).
+ * distinguir mayúsculas, acentos ni emojis del inicio), con dos excepciones:
+ *
+ *  - "N/A" (también "NA", "N.A." o "No aplica") va siempre al INICIO.
+ *  - "Otro", "Otra", "Otros", "Otras" (con o sin texto extra) van siempre al FINAL.
  */
 class OpcionesOrdenadas
 {
@@ -21,11 +23,11 @@ class OpcionesOrdenadas
         $opciones = $opciones instanceof Collection ? $opciones->all() : $opciones;
 
         uasort($opciones, function ($a, $b) {
-            $ultimaA = self::esComodin($a);
-            $ultimaB = self::esComodin($b);
+            $rangoA = self::rango($a);
+            $rangoB = self::rango($b);
 
-            if ($ultimaA !== $ultimaB) {
-                return $ultimaA <=> $ultimaB;
+            if ($rangoA !== $rangoB) {
+                return $rangoA <=> $rangoB;
             }
 
             return strnatcasecmp(self::clave($a), self::clave($b));
@@ -34,16 +36,23 @@ class OpcionesOrdenadas
         return $opciones;
     }
 
+    /** 0 = N/A (al inicio), 1 = normal, 2 = Otro/Otra (al final). */
+    private static function rango(string $etiqueta): int
+    {
+        $clave = self::clave($etiqueta);
+
+        return match (true) {
+            (bool) preg_match('/^(n\/a|n\.a\.?|na|no aplica)$/', $clave) => 0,
+            (bool) preg_match('/^otr[oa]s?\b/', $clave) => 2,
+            default => 1,
+        };
+    }
+
     private static function clave(string $etiqueta): string
     {
         // Quita emojis y símbolos del inicio ("🟢 Alta" -> "Alta") y los acentos.
         $limpia = preg_replace('/^[^\p{L}\p{N}]+/u', '', $etiqueta);
 
-        return Str::ascii(Str::lower($limpia));
-    }
-
-    private static function esComodin(string $etiqueta): bool
-    {
-        return (bool) preg_match('/^otr[oa]s?\b/', self::clave($etiqueta));
+        return trim(Str::ascii(Str::lower($limpia)));
     }
 }
