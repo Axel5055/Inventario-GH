@@ -31,6 +31,8 @@ return [
     // Proveedor de IA para leer responsivas escaneadas: 'gemini' (nivel gratuito) o 'anthropic'.
     'ia' => [
         'proveedor' => env('AI_PROVIDER', 'gemini'),
+        // Segundos que espera la carga masiva antes de reintentar (x número de intento) cuando la IA está saturada.
+        'espera_reintento' => 20,
     ],
 
     'gemini' => [
@@ -38,6 +40,9 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
         // Si el modelo principal está saturado (429/503), se reintenta con este.
         'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-flash-lite-latest'),
+        // Opcional: tokens de "razonamiento" del modelo. Déjalo vacío (el del modelo): en pruebas,
+        // con 0 la API de gemini-flash-latest se quedó sin responder.
+        'thinking_budget' => env('GEMINI_THINKING_BUDGET'),
     ],
 
     'anthropic' => [

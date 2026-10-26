@@ -9,6 +9,7 @@ use App\Models\EntregaDispositivo;
 use App\Models\EquipoCelular;
 use App\Models\EquipoComputo;
 use App\Services\CargaMasivaRegistros;
+use App\Services\ErrorTemporalIA;
 use App\Services\ExcelRegistros;
 use App\Services\ExtractorResponsivaPdf;
 use BackedEnum;
@@ -24,14 +25,24 @@ use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
+use RuntimeException;
+use Throwable;
 use UnitEnum;
 
 /**
  * Carga masiva de registros desde responsivas: la IA lee cada documento y se
  * crean registros "pendientes" que el personal revisa y valida. Se procesa un
- * archivo por solicitud (el navegador va pidiendo el siguiente) para no chocar
- * con el tiempo máximo de ejecución del servidor.
+ * bloque pequeño por solicitud (un archivo, unas páginas de un PDF grande o unas
+ * filas de un Excel) y el navegador va pidiendo el siguiente, para no chocar con
+ * el tiempo máximo de ejecución del servidor.
+ *
+ * Si la IA está saturada, el bloque se reintenta solo (con espera) y, si sigue
+ * fallando, se conserva el archivo para reintentarlo con un botón. Todo lo creado
+ * lleva el identificador de la carga para poder deshacerla completa.
  */
 class CargaMasiva extends Page implements HasSchemas
 {
@@ -53,19 +64,48 @@ class CargaMasiva extends Page implements HasSchemas
     /** @var array<string, mixed>|null */
     public ?array $data = [];
 
-    /** @var array<int, array{ruta: string, nombre: string}> */
+    /** Veces que se reintenta un bloque cuando la IA está saturada, antes de dejarlo para reintento manual. */
+    private const REINTENTOS = 2;
+
+    // Todo lo del proceso es de solo lectura para el navegador: el cliente no puede
+    // alterar rutas de archivos ni el avance.
+
+    /**
+     * Bloques pendientes. Cada uno: ruta, nombre, etiqueta, intentos, no_antes_de y,
+     * según el modo, desde/hasta (páginas) o fila_desde/cantidad (Excel).
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    #[Locked]
     public array $cola = [];
 
-    /** @var array<int, array{archivo: string, estado: string, nombre: ?string, mensaje: string}> */
+    /**
+     * Bloques que fallaron por saturación de la IA y conservan su archivo.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    #[Locked]
+    public array $fallidos = [];
+
+    /** @var array<int, array<string, mixed>> */
+    #[Locked]
     public array $resultados = [];
 
+    #[Locked]
     public int $total = 0;
 
+    #[Locked]
     public bool $procesando = false;
 
+    #[Locked]
     public string $tipoProceso = ExtractorResponsivaPdf::TIPO_COMPUTO;
 
+    #[Locked]
     public string $modoProceso = 'archivos';
+
+    /** Identificador de la carga en curso (columna lote_carga de los registros). */
+    #[Locked]
+    public ?string $lote = null;
 
     protected function getHeaderActions(): array
     {
@@ -97,6 +137,12 @@ class CargaMasiva extends Page implements HasSchemas
 
     public function mount(): void
     {
+        try {
+            CargaMasivaRegistros::limpiarTemporales();
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         $this->form->fill([
             'tipo' => array_key_first($this->tiposPermitidos()),
             'modo' => 'archivos',
@@ -188,37 +234,53 @@ class CargaMasiva extends Page implements HasSchemas
         $modo = $estado['modo'] ?? 'archivos';
 
         if ($modo === 'unico') {
-            $ruta = $estado['pdf_unico'] ?? null;
-            $cola = $ruta ? [['ruta' => $ruta, 'nombre' => $estado['nombre_pdf_unico'] ?? basename($ruta)]] : [];
+            $archivos = $this->soloRutasValidas([['ruta' => $estado['pdf_unico'] ?? null, 'nombre' => $estado['nombre_pdf_unico'] ?? null]]);
         } elseif ($modo === 'excel') {
-            $ruta = $estado['excel'] ?? null;
-            $cola = $ruta ? [['ruta' => $ruta, 'nombre' => $estado['nombre_excel'] ?? basename($ruta)]] : [];
+            $archivos = $this->soloRutasValidas([['ruta' => $estado['excel'] ?? null, 'nombre' => $estado['nombre_excel'] ?? null]]);
         } else {
             $nombres = $estado['nombres_archivos'] ?? [];
-            $cola = collect($estado['archivos'] ?? [])
-                ->map(fn ($ruta, $clave) => ['ruta' => $ruta, 'nombre' => $nombres[$clave] ?? $nombres[$ruta] ?? basename($ruta)])
+            $archivos = $this->soloRutasValidas(collect($estado['archivos'] ?? [])
+                ->map(fn ($ruta, $clave) => ['ruta' => $ruta, 'nombre' => $nombres[$clave] ?? $nombres[$ruta] ?? null])
                 ->values()
-                ->all();
+                ->all());
         }
 
-        if ($cola === []) {
+        if ($archivos === []) {
             Notification::make()->title('Sube al menos un archivo')->warning()->send();
 
             return;
         }
 
+        try {
+            $cola = [];
+            foreach ($archivos as $archivo) {
+                array_push($cola, ...$this->bloquesDe($modo, $tipo, $archivo));
+            }
+        } catch (RuntimeException $e) {
+            // Un Excel que no sirve se rechaza completo y de inmediato, con el motivo.
+            foreach ($archivos as $archivo) {
+                Storage::disk('local')->delete($archivo['ruta']);
+            }
+
+            Notification::make()->title('No se pudo leer el archivo')->body($e->getMessage())->danger()->send();
+
+            return;
+        }
+
         $this->cola = $cola;
+        $this->fallidos = [];
         $this->total = count($cola);
         $this->resultados = [];
         $this->tipoProceso = $tipo;
         $this->modoProceso = $modo;
+        $this->lote = now()->format('ymd-His') . '-u' . (auth()->id() ?? 0) . '-' . Str::lower(Str::random(4));
         $this->procesando = true;
 
         $this->form->fill(['tipo' => $tipo, 'modo' => $modo]);
     }
 
     /**
-     * Procesa el siguiente archivo de la cola. Devuelve true mientras queden más.
+     * Procesa el siguiente bloque de la cola. Devuelve true mientras queden más.
      */
     public function procesarSiguiente(): bool
     {
@@ -237,16 +299,48 @@ class CargaMasiva extends Page implements HasSchemas
         // La lectura con IA puede tardar: se amplía el límite de este solo paso.
         @set_time_limit(420);
 
-        $item = array_shift($this->cola);
+        // Un bloque que se está reintentando espera su turno; si no hay otro listo, se espera.
+        $indice = collect($this->cola)->search(fn ($b) => ($b['no_antes_de'] ?? 0) <= time());
+
+        if ($indice === false) {
+            $indice = collect($this->cola)->keys()->sortBy(fn ($k) => $this->cola[$k]['no_antes_de'])->first();
+            sleep(max(1, min(40, $this->cola[$indice]['no_antes_de'] - time())));
+        }
+
+        $bloque = $this->cola[$indice];
+        unset($this->cola[$indice]);
+        $this->cola = array_values($this->cola);
+
         $servicio = app(CargaMasivaRegistros::class);
 
-        $filas = match ($this->modoProceso) {
-            'unico' => $servicio->procesarPdfUnico($this->tipoProceso, $item['ruta'], $item['nombre']),
-            'excel' => $servicio->procesarExcel($this->tipoProceso, $item['ruta'], $item['nombre']),
-            default => $servicio->procesarArchivo($this->tipoProceso, $item['ruta'], $item['nombre']),
-        };
+        try {
+            $filas = match ($this->modoProceso) {
+                'unico' => $servicio->procesarPdfUnico($this->tipoProceso, $bloque['ruta'], $bloque['nombre'], $bloque['desde'] ?? null, $bloque['hasta'] ?? null, $this->lote),
+                'excel' => $servicio->procesarExcel($this->tipoProceso, $bloque['ruta'], $bloque['nombre'], (int) ($bloque['fila_desde'] ?? 0), $bloque['cantidad'] ?? null, $this->lote),
+                default => $servicio->procesarArchivo($this->tipoProceso, $bloque['ruta'], $bloque['nombre'], $this->lote),
+            };
 
-        $this->resultados = [...$this->resultados, ...$filas];
+            $this->resultados = [...$this->resultados, ...$filas];
+        } catch (ErrorTemporalIA $e) {
+            $bloque['intentos'] = ($bloque['intentos'] ?? 0) + 1;
+
+            if ($bloque['intentos'] <= self::REINTENTOS) {
+                // Va al final de la cola y no se vuelve a intentar hasta pasado un rato.
+                $bloque['no_antes_de'] = time() + (int) config('services.ia.espera_reintento', 20) * $bloque['intentos'];
+                $this->cola[] = $bloque;
+
+                return true;
+            }
+
+            $this->fallidos[] = $bloque;
+            $this->resultados[] = $this->filaReintentable($bloque, $e->getMessage());
+        } catch (Throwable $e) {
+            report($e);
+
+            $this->resultados[] = ['archivo' => $bloque['etiqueta'], 'estado' => 'error', 'nombre' => null, 'mensaje' => $e->getMessage()];
+        }
+
+        $this->liberarArchivo($bloque['ruta']);
 
         if ($this->cola === []) {
             $this->terminar();
@@ -258,38 +352,244 @@ class CargaMasiva extends Page implements HasSchemas
     }
 
     /**
-     * El navegador perdió la conexión o el servidor cortó la solicitud por tiempo.
+     * El navegador perdió la conexión o el servidor cortó la solicitud por tiempo:
+     * lo que faltaba se conserva para reintentarlo.
      */
     public function procesoInterrumpido(): void
     {
-        foreach ($this->cola as $item) {
-            Storage::disk('local')->delete($item['ruta']);
-            $this->resultados[] = ['archivo' => $item['nombre'], 'estado' => 'error', 'nombre' => null, 'mensaje' => 'No se procesó: el proceso se interrumpió. Súbelo de nuevo.'];
+        foreach ($this->cola as $bloque) {
+            $this->fallidos[] = $bloque;
+            $this->resultados[] = $this->filaReintentable($bloque, 'No se procesó: el proceso se interrumpió.');
         }
 
         $this->cola = [];
         $this->terminar();
     }
 
+    /**
+     * Vuelve a poner en la cola lo que no se pudo procesar por saturación de la IA.
+     */
+    public function reintentarFallidos(): void
+    {
+        abort_unless(array_key_exists($this->tipoProceso, $this->tiposPermitidos()), 403);
+
+        if ($this->procesando || $this->fallidos === []) {
+            return;
+        }
+
+        $this->resultados = array_values(array_filter($this->resultados, fn ($fila) => empty($fila['reintentable'])));
+        $this->cola = array_map(fn ($b) => [...$b, 'intentos' => 0, 'no_antes_de' => 0], $this->fallidos);
+        $this->fallidos = [];
+        $this->total = count($this->cola);
+        $this->procesando = true;
+    }
+
     public function nuevaCarga(): void
     {
+        foreach ($this->fallidos as $bloque) {
+            Storage::disk('local')->delete($bloque['ruta']);
+        }
+
+        $this->fallidos = [];
         $this->resultados = [];
         $this->total = 0;
+        $this->lote = null;
         $this->mount();
+    }
+
+    /**
+     * Elimina lo que creó esta carga y sigue pendiente de revisión (con sus
+     * responsivas adjuntas). Lo que ya se revisó o editó se conserva.
+     */
+    public function deshacerCargaAction(): Action
+    {
+        return Action::make('deshacerCarga')
+            ->label('Deshacer esta carga')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->visible(fn () => $this->puedeDeshacer())
+            ->requiresConfirmation()
+            ->modalHeading('¿Deshacer esta carga?')
+            ->modalDescription(fn () => 'Se eliminarán de forma definitiva los ' . $this->pendientesDelLote() . ' registros que creó esta carga y que siguen pendientes de revisión, junto con las responsivas adjuntas. Los que ya revisaste o editaste no se tocan.')
+            ->modalSubmitActionLabel('Sí, eliminar')
+            ->action(function () {
+                abort_unless($this->puedeDeshacer(), 403);
+
+                $disco = Storage::disk('local');
+                $eliminados = 0;
+
+                foreach ($this->consultaDelLote()->where('estado_revision', 'pendiente')->get() as $registro) {
+                    foreach (['responsiva_pdf', 'responsiva_baja_pdf'] as $campo) {
+                        if (filled($registro->{$campo})) {
+                            $disco->delete($registro->{$campo});
+                        }
+                    }
+
+                    $registro->forceDelete();
+                    $eliminados++;
+                }
+
+                $conservados = $this->consultaDelLote()->count();
+
+                $this->nuevaCarga();
+
+                Notification::make()
+                    ->title($eliminados . ' registro(s) eliminado(s)')
+                    ->body($conservados > 0 ? "{$conservados} ya estaban revisados y se conservaron." : null)
+                    ->success()
+                    ->send();
+            });
+    }
+
+    private function puedeDeshacer(): bool
+    {
+        return ! $this->procesando
+            && $this->lote !== null
+            && auth()->user()?->can('deleteAny', $this->modeloProceso())
+            && $this->pendientesDelLote() > 0;
+    }
+
+    private function pendientesDelLote(): int
+    {
+        return $this->consultaDelLote()->where('estado_revision', 'pendiente')->count();
+    }
+
+    private function consultaDelLote()
+    {
+        return $this->modeloProceso()::query()->where('lote_carga', $this->lote);
+    }
+
+    /**
+     * @return class-string<Model>
+     */
+    private function modeloProceso(): string
+    {
+        return match ($this->tipoProceso) {
+            ExtractorResponsivaPdf::TIPO_CELULAR => EquipoCelular::class,
+            ExtractorResponsivaPdf::TIPO_DISPOSITIVOS => EntregaDispositivo::class,
+            default => EquipoComputo::class,
+        };
+    }
+
+    /**
+     * Divide un archivo en los bloques que se procesarán por separado.
+     *
+     * @param  array{ruta: string, nombre: string}  $archivo
+     * @return array<int, array<string, mixed>>
+     *
+     * @throws RuntimeException cuando el Excel no se puede leer
+     */
+    private function bloquesDe(string $modo, string $tipo, array $archivo): array
+    {
+        $servicio = app(CargaMasivaRegistros::class);
+        $base = $archivo + ['etiqueta' => $archivo['nombre'], 'intentos' => 0, 'no_antes_de' => 0];
+
+        if ($modo === 'unico') {
+            $paginas = $servicio->contarPaginasPdf($archivo['ruta']);
+            $por = CargaMasivaRegistros::PAGINAS_POR_BLOQUE;
+
+            if ($paginas === null || $paginas <= $por) {
+                return [$base];
+            }
+
+            $bloques = [];
+            for ($desde = 1; $desde <= $paginas; $desde += $por) {
+                $hasta = min($desde + $por - 1, $paginas);
+                $bloques[] = [...$base, 'desde' => $desde, 'hasta' => $hasta, 'etiqueta' => "{$archivo['nombre']} · páginas {$desde} a {$hasta} de {$paginas}"];
+            }
+
+            return $bloques;
+        }
+
+        if ($modo === 'excel') {
+            $filas = $servicio->contarFilasExcel($tipo, $archivo['ruta'], $archivo['nombre']);
+            $por = CargaMasivaRegistros::FILAS_POR_BLOQUE;
+
+            if ($filas <= $por) {
+                return [$base];
+            }
+
+            $bloques = [];
+            for ($desde = 0; $desde < $filas; $desde += $por) {
+                $hasta = min($desde + $por, $filas);
+                $bloques[] = [...$base, 'fila_desde' => $desde, 'cantidad' => $por, 'etiqueta' => "{$archivo['nombre']} · filas " . ($desde + 1) . " a {$hasta} de {$filas}"];
+            }
+
+            return $bloques;
+        }
+
+        return [$base];
+    }
+
+    /**
+     * Solo rutas dentro de la carpeta temporal de esta página: el estado del
+     * formulario viene del navegador y no debe poder apuntar a otros archivos.
+     *
+     * @param  array<int, array{ruta: mixed, nombre: mixed}>  $archivos
+     * @return array<int, array{ruta: string, nombre: string}>
+     */
+    private function soloRutasValidas(array $archivos): array
+    {
+        $validos = [];
+
+        foreach ($archivos as $archivo) {
+            $ruta = $archivo['ruta'] ?? null;
+
+            if (is_string($ruta) && str_starts_with($ruta, CargaMasivaRegistros::CARPETA_TEMPORAL . '/') && ! str_contains($ruta, '..')) {
+                $validos[] = ['ruta' => $ruta, 'nombre' => (string) ($archivo['nombre'] ?? basename($ruta))];
+            }
+        }
+
+        return $validos;
+    }
+
+    /**
+     * Borra el archivo subido cuando ya no lo necesita ningún bloque (de la cola o
+     * pendiente de reintento).
+     */
+    private function liberarArchivo(string $ruta): void
+    {
+        $enUso = collect([...$this->cola, ...$this->fallidos])->contains(fn ($b) => $b['ruta'] === $ruta);
+
+        if (! $enUso) {
+            Storage::disk('local')->delete($ruta);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $bloque
+     * @return array<string, mixed>
+     */
+    private function filaReintentable(array $bloque, string $motivo): array
+    {
+        return [
+            'archivo' => $bloque['etiqueta'],
+            'estado' => 'error',
+            'nombre' => null,
+            'mensaje' => $motivo . ' Puedes reintentarlo con el botón «Reintentar».',
+            'reintentable' => true,
+        ];
     }
 
     private function terminar(): void
     {
         $this->procesando = false;
 
+        // Un PDF con varias responsivas se lee por bloques: si ninguno encontró nada, se avisa aquí.
+        if ($this->modoProceso === 'unico' && $this->resultados === []) {
+            $this->resultados[] = ['archivo' => 'PDF', 'estado' => 'error', 'nombre' => null, 'mensaje' => 'No se detectó ninguna responsiva en el PDF.'];
+        }
+
         $resultados = collect($this->resultados);
         $duplicados = $resultados->where('estado', 'duplicado')->count();
         $creados = $resultados->where('estado', 'creado')->count() + $duplicados;
         $problemas = $resultados->whereIn('estado', ['omitido', 'error'])->count();
+        $porReintentar = count($this->fallidos);
 
         $avisos = array_filter([
             $duplicados > 0 ? "{$duplicados} se crearon como BAJA por posible duplicado." : null,
             $problemas > 0 ? "{$problemas} documento(s) no se pudieron crear." : null,
+            $porReintentar > 0 ? "{$porReintentar} se pueden reintentar con el botón «Reintentar»." : null,
         ]);
 
         Notification::make()

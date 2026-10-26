@@ -35,6 +35,7 @@ class EquipoCelular extends Model
         'responsiva_baja_pdf',
         'usuario_referencia',
         'origen_registro',
+        'lote_carga',
         'estado_revision',
     ];
 

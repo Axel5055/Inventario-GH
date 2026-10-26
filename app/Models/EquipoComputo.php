@@ -54,6 +54,7 @@ class EquipoComputo extends Model
         'bitlocker_key',
         'usuario_referencia',
         'origen_registro',
+        'lote_carga',
         'estado_revision',
     ];
 

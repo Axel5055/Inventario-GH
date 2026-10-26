@@ -32,6 +32,7 @@ class EntregaDispositivo extends Model
         'observaciones',
         'responsiva_pdf',
         'origen_registro',
+        'lote_carga',
         'estado_revision',
     ];
 

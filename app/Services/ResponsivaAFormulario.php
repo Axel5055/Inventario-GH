@@ -27,6 +27,30 @@ class ResponsivaAFormulario
         'rrhh' => 'recursos humanos',
     ];
 
+    /** @var array<string, Collection<int, string>> catálogos ya consultados (una carga masiva los pide por cada fila) */
+    private array $catalogos = [];
+
+    /**
+     * @param  \Closure(): Collection<int, string>  $consulta
+     * @return Collection<int, string>
+     */
+    private function catalogoDe(string $clave, \Closure $consulta): Collection
+    {
+        return $this->catalogos[$clave] ??= $consulta();
+    }
+
+    /** @return Collection<int, string> */
+    private function sucursales(): Collection
+    {
+        return $this->catalogoDe('sucursales', fn () => Sucursal::where('activo', true)->pluck('nombre', 'id'));
+    }
+
+    /** @return Collection<int, string> */
+    private function areas(): Collection
+    {
+        return $this->catalogoDe('areas', fn () => Area::where('activo', true)->pluck('nombre', 'id'));
+    }
+
     /**
      * @param  array<string, mixed>  $d
      * @return array{datos: array<string, mixed>, avisos: array<int, string>}
@@ -57,16 +81,17 @@ class ResponsivaAFormulario
         $datos['fecha_entrega'] = $this->fecha($d['fecha_movimiento'] ?? null);
         $datos['nombre_usuario'] = $this->limpio($d['nombre_completo'] ?? null);
         $datos['correo_electronico'] = $this->limpio($d['correo_corporativo'] ?? null);
+        $this->revisarCorreo($datos['correo_electronico'], $avisos);
         $datos['ext'] = $this->soloDigitos($d['extension'] ?? null, 5);
 
         $datos['sucursal_id'] = $this->catalogo(
-            Sucursal::where('activo', true)->pluck('nombre', 'id'), $d['sucursal'] ?? null, 'Sucursal', $avisos
+            $this->sucursales(), $d['sucursal'] ?? null, 'Sucursal', $avisos
         );
         $datos['area_id'] = $this->catalogo(
-            Area::where('activo', true)->pluck('nombre', 'id'), $d['area'] ?? null, 'Área', $avisos
+            $this->areas(), $d['area'] ?? null, 'Área', $avisos
         );
         $datos['marca_id'] = $this->catalogo(
-            Marca::activas()->deComputo()->pluck('nombre', 'id'), $d['marca'] ?? null, 'Marca', $avisos
+            $this->catalogoDe('marcas_computo', fn () => Marca::activas()->deComputo()->pluck('nombre', 'id')), $d['marca'] ?? null, 'Marca', $avisos
         );
 
         if (in_array($d['tipo_equipo'] ?? null, ['laptop', 'desktop', 'all_in_one', 'workstation', 'mini_pc'], true)) {
@@ -121,10 +146,13 @@ class ResponsivaAFormulario
         $datos['numero_telefonico'] = $this->limpio($d['telefono'] ?? null, 20);
         $datos['curp'] = ($c = $this->limpio($d['curp'] ?? null, 20)) ? Str::upper($c) : null;
 
+        $this->revisarTelefono($datos['numero_telefonico'], $avisos);
+        $this->revisarCurp($datos['curp'], $avisos);
+
         // "Puesto / Área" viene en un solo campo: si coincide con un área se usa
         // como área; si no, como el formulario ya no tiene puesto, se anota en observaciones.
         $puestoArea = $this->limpio($d['puesto_area'] ?? null);
-        $areaId = $puestoArea ? $this->buscarId(Area::where('activo', true)->pluck('nombre', 'id'), $puestoArea) : null;
+        $areaId = $puestoArea ? $this->buscarId($this->areas(), $puestoArea) : null;
         $notaPuesto = null;
         if ($areaId) {
             $datos['area_id'] = $areaId;
@@ -133,10 +161,10 @@ class ResponsivaAFormulario
         }
 
         $datos['sucursal_id'] = $this->catalogo(
-            Sucursal::where('activo', true)->pluck('nombre', 'id'), $d['sucursal'] ?? null, 'Sucursal', $avisos
+            $this->sucursales(), $d['sucursal'] ?? null, 'Sucursal', $avisos
         );
         $datos['marca_id'] = $this->catalogo(
-            Marca::activas()->deCelular()->pluck('nombre', 'id'), $d['marca'] ?? null, 'Marca', $avisos
+            $this->catalogoDe('marcas_celular', fn () => Marca::activas()->deCelular()->pluck('nombre', 'id')), $d['marca'] ?? null, 'Marca', $avisos
         );
 
         if (in_array($d['tipo_equipo'] ?? null, ['celular', 'tablet', 'ipad', 'otro'], true)) {
@@ -144,7 +172,7 @@ class ResponsivaAFormulario
         }
 
         $datos['modelo'] = $this->limpio($d['modelo'] ?? null);
-        $datos['imei'] = $this->limpio($d['imei'] ?? null, 20);
+        $datos['imei'] = $this->imei($d['imei'] ?? null, $avisos);
         $datos['iccid'] = $this->limpio($d['iccid'] ?? null, 22);
         $notas = array_filter([$this->limpio($d['observaciones'] ?? null), $notaPuesto]);
         $datos['observaciones'] = $notas ? implode("\n", $notas) : null;
@@ -177,19 +205,21 @@ class ResponsivaAFormulario
         $datos['fecha_entrega'] = $fecha ? substr($fecha, 0, 10) : null;
         $datos['nombre_usuario'] = $this->limpio($d['nombre_completo'] ?? null);
         $datos['correo_electronico'] = $this->limpio($d['correo'] ?? null);
+        $this->revisarCorreo($datos['correo_electronico'], $avisos);
 
         $datos['sucursal_id'] = $this->catalogo(
-            Sucursal::where('activo', true)->pluck('nombre', 'id'), $d['sucursal'] ?? null, 'Sucursal', $avisos
+            $this->sucursales(), $d['sucursal'] ?? null, 'Sucursal', $avisos
         );
         $datos['area_id'] = $this->catalogo(
-            Area::where('activo', true)->pluck('nombre', 'id'), $d['area'] ?? null, 'Área', $avisos
+            $this->areas(), $d['area'] ?? null, 'Área', $avisos
         );
 
         if ($tipoTexto = $this->limpio($d['tipo_dispositivo'] ?? null)) {
-            $tipoId = $this->buscarId(TipoDispositivo::where('activo', true)->pluck('nombre', 'id'), $tipoTexto);
+            $tipos = $this->catalogoDe('tipos', fn () => TipoDispositivo::where('activo', true)->pluck('nombre', 'id'));
+            $tipoId = $this->buscarId($tipos, $tipoTexto);
 
             if ($tipoId) {
-                $datos['tipo_dispositivo'] = TipoDispositivo::find($tipoId)?->nombre;
+                $datos['tipo_dispositivo'] = $tipos[$tipoId];
             } else {
                 $datos['tipo_dispositivo'] = 'Otro';
                 $avisos[] = "Tipo de dispositivo «{$tipoTexto}» no está en el catálogo; se usó «Otro».";
@@ -197,8 +227,9 @@ class ResponsivaAFormulario
         }
 
         $marcaTexto = $this->limpio($d['marca'] ?? null, 100);
-        $marcaId = $marcaTexto ? $this->buscarId(Marca::activas()->pluck('nombre', 'id'), $marcaTexto) : null;
-        $datos['marca'] = $marcaId ? Marca::find($marcaId)?->nombre : $marcaTexto;
+        $marcas = $this->catalogoDe('marcas_todas', fn () => Marca::activas()->pluck('nombre', 'id'));
+        $marcaId = $marcaTexto ? $this->buscarId($marcas, $marcaTexto) : null;
+        $datos['marca'] = $marcaId ? $marcas[$marcaId] : $marcaTexto;
 
         $datos['modelo'] = $this->limpio($d['modelo'] ?? null, 150);
         $datos['numero_serie'] = $this->limpio($d['numero_serie'] ?? null, 200);
@@ -215,7 +246,8 @@ class ResponsivaAFormulario
 
     /**
      * Devuelve el id del catálogo que coincide con el texto; si no hay
-     * coincidencia agrega un aviso para que se elija a mano.
+     * coincidencia (o hay varias igual de probables) agrega un aviso para que se
+     * elija a mano.
      *
      * @param  Collection<int, string>  $opciones
      * @param  array<int, string>  $avisos
@@ -228,10 +260,12 @@ class ResponsivaAFormulario
             return null;
         }
 
-        $id = $this->buscarId($opciones, $texto);
+        ['id' => $id, 'ambiguas' => $ambiguas] = $this->coincidencia($opciones, $texto);
 
         if ($id === null) {
-            $avisos[] = "{$etiqueta} «{$texto}» no está en el catálogo, elígela manualmente.";
+            $avisos[] = $ambiguas
+                ? "{$etiqueta} «{$texto}» podría ser " . implode(' o ', array_map(fn ($n) => "«{$n}»", $ambiguas)) . ', elígela manualmente.'
+                : "{$etiqueta} «{$texto}» no está en el catálogo, elígela manualmente.";
         }
 
         return $id;
@@ -242,45 +276,173 @@ class ResponsivaAFormulario
      */
     public function buscarId(Collection $opciones, string $texto): ?int
     {
+        return $this->coincidencia($opciones, $texto)['id'];
+    }
+
+    /**
+     * Busca el texto en las opciones del catálogo, de lo más seguro a lo más flexible:
+     * nombre exacto, abreviatura conocida, una palabra completa dentro del otro texto
+     * y, por último, un error de dedo pequeño. Si varias opciones son igual de
+     * probables no se elige ninguna (se devuelven en "ambiguas").
+     *
+     * @param  Collection<int, string>  $opciones
+     * @return array{id: ?int, ambiguas: array<int, string>}
+     */
+    public function coincidencia(Collection $opciones, string $texto): array
+    {
         $buscado = $this->normalizar($texto);
 
-        foreach ($opciones as $id => $nombre) {
-            if ($this->normalizar($nombre) === $buscado) {
-                return (int) $id;
-            }
+        if ($buscado === '') {
+            return ['id' => null, 'ambiguas' => []];
         }
 
-        foreach ($opciones as $id => $nombre) {
-            $n = $this->normalizar($nombre);
+        $normalizadas = $opciones->map(fn ($nombre) => $this->normalizar($nombre));
 
-            if ($n !== '' && (str_contains($n, $buscado) || str_contains($buscado, $n))) {
-                return (int) $id;
+        foreach ($normalizadas as $id => $n) {
+            if ($n === $buscado) {
+                return ['id' => (int) $id, 'ambiguas' => []];
             }
         }
 
         // Abreviaturas comunes (ej. "RH" = Recursos Humanos).
         $alias = self::ALIAS[preg_replace('/[^a-z]/', '', $buscado)] ?? null;
         if ($alias) {
-            foreach ($opciones as $id => $nombre) {
-                if ($this->normalizar($nombre) === $alias) {
-                    return (int) $id;
+            foreach ($normalizadas as $id => $n) {
+                if ($n === $alias) {
+                    return ['id' => (int) $id, 'ambiguas' => []];
                 }
             }
         }
 
-        // Errores de dedo (ej. "Costituyentes"): se compara sin números y
-        // se tolera una diferencia pequeña, solo con textos de cierto largo.
+        // Una palabra (o frase) completa dentro de la otra: "HP Inc" ~ "HP". Se exigen
+        // límites de palabra para que "TI" no coincida con "Logística".
+        $candidatos = [];
+        foreach ($normalizadas as $id => $n) {
+            if ($n === '') {
+                continue;
+            }
+
+            [$corto, $largo] = mb_strlen($n) <= mb_strlen($buscado) ? [$n, $buscado] : [$buscado, $n];
+
+            if (mb_strlen($corto) >= 2 && preg_match('/(?<![a-z0-9])' . preg_quote($corto, '/') . '(?![a-z0-9])/', $largo)) {
+                $candidatos[$id] = mb_strlen($corto) / mb_strlen($largo);
+            }
+        }
+
+        if ($candidatos !== []) {
+            return $this->elegir($candidatos, $opciones, mayor: true);
+        }
+
+        // Errores de dedo (ej. "Costituyentes"): se tolera una diferencia pequeña, solo
+        // con textos de cierto largo. Si lo escrito no trae número se compara contra el
+        // nombre sin su número ("Constituyentes" ~ "Constituyentes 1080"); si lo trae,
+        // el número debe coincidir ("Polanco 3" no se confunde con "Polanco 2").
         if (mb_strlen($buscado) >= 6) {
-            foreach ($opciones as $id => $nombre) {
-                $n = trim(preg_replace('/\d+/', '', $this->normalizar($nombre)));
+            $conNumero = (bool) preg_match('/\d/', $buscado);
 
-                if ($n !== '' && levenshtein($buscado, $n) <= max(1, intdiv(mb_strlen($n), 8))) {
-                    return (int) $id;
+            foreach ($normalizadas as $id => $nombre) {
+                $n = $conNumero ? $nombre : trim(preg_replace('/\d+/', '', $nombre));
+                $distancia = $n !== '' ? levenshtein($buscado, $n) : null;
+
+                if ($distancia !== null && $distancia <= max(1, intdiv(mb_strlen($n), 8))) {
+                    $candidatos[$id] = $distancia;
                 }
+            }
+
+            if ($candidatos !== []) {
+                return $this->elegir($candidatos, $opciones, mayor: false);
             }
         }
 
-        return null;
+        return ['id' => null, 'ambiguas' => []];
+    }
+
+    /**
+     * Se queda con la mejor puntuación; si hay empate, no elige.
+     *
+     * @param  array<int, float|int>  $puntos  id => puntuación
+     * @param  Collection<int, string>  $opciones
+     * @return array{id: ?int, ambiguas: array<int, string>}
+     */
+    private function elegir(array $puntos, Collection $opciones, bool $mayor): array
+    {
+        $mayor ? arsort($puntos) : asort($puntos);
+
+        $mejor = array_key_first($puntos);
+        $empatadas = array_keys(array_filter($puntos, fn ($p) => $p === $puntos[$mejor]));
+
+        if (count($empatadas) === 1) {
+            return ['id' => (int) $mejor, 'ambiguas' => []];
+        }
+
+        return ['id' => null, 'ambiguas' => array_map(fn ($id) => $opciones[$id], $empatadas)];
+    }
+
+    /**
+     * IMEI con solo dígitos cuando son 15. Si no tiene 15 dígitos o no pasa el dígito
+     * verificador (Luhn) se conserva lo leído y se avisa: lo más probable es un
+     * carácter mal leído del escaneo.
+     *
+     * @param  array<int, string>  $avisos
+     */
+    private function imei(mixed $valor, array &$avisos): ?string
+    {
+        $imei = $this->limpio($valor, 30);
+
+        if ($imei === null) {
+            return null;
+        }
+
+        $digitos = preg_replace('/\D/', '', $imei);
+
+        if (strlen($digitos) !== 15) {
+            $avisos[] = "IMEI «{$imei}» no tiene 15 dígitos; revísalo contra el documento.";
+
+            return mb_substr($imei, 0, 20);
+        }
+
+        $suma = 0;
+        foreach (str_split(strrev($digitos)) as $i => $digito) {
+            $n = (int) $digito * ($i % 2 === 1 ? 2 : 1);
+            $suma += $n > 9 ? $n - 9 : $n;
+        }
+
+        if ($suma % 10 !== 0) {
+            $avisos[] = "IMEI «{$imei}» no pasa la validación del dígito verificador; revisa que se haya leído bien.";
+        }
+
+        return $digitos;
+    }
+
+    /** @param  array<int, string>  $avisos */
+    private function revisarTelefono(?string $telefono, array &$avisos): void
+    {
+        if ($telefono === null) {
+            return;
+        }
+
+        $digitos = preg_replace('/\D/', '', $telefono);
+        $digitos = preg_replace('/^(?:521|52)(?=\d{10}$)/', '', $digitos);
+
+        if (strlen($digitos) !== 10) {
+            $avisos[] = "Teléfono «{$telefono}» no tiene 10 dígitos; revísalo.";
+        }
+    }
+
+    /** @param  array<int, string>  $avisos */
+    private function revisarCurp(?string $curp, array &$avisos): void
+    {
+        if ($curp !== null && ! preg_match('/^[A-Z]{4}\d{6}[HMX][A-Z]{2}[A-Z]{3}[A-Z0-9]\d$/', $curp)) {
+            $avisos[] = "CURP «{$curp}» no tiene el formato esperado (18 caracteres); revísala.";
+        }
+    }
+
+    /** @param  array<int, string>  $avisos */
+    private function revisarCorreo(?string $correo, array &$avisos): void
+    {
+        if ($correo !== null && ! filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+            $avisos[] = "Correo «{$correo}» no parece válido; revísalo.";
+        }
     }
 
     private function normalizar(string $valor): string

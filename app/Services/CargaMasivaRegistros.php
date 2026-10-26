@@ -32,68 +32,108 @@ class CargaMasivaRegistros
         private readonly ExcelRegistros $excel,
     ) {}
 
+    /** Páginas que se leen por solicitud en un PDF con varias responsivas. */
+    public const PAGINAS_POR_BLOQUE = 8;
+
+    /** Filas del Excel que se crean por solicitud. */
+    public const FILAS_POR_BLOQUE = 50;
+
+    /** Carpeta de los archivos subidos mientras se procesan. */
+    public const CARPETA_TEMPORAL = 'tmp/carga-masiva';
+
     /**
      * Un archivo = una responsiva. Si es PDF se adjunta al registro creado.
+     * El archivo subido NO se borra aquí: quien llama decide cuándo (si la IA estaba
+     * saturada se conserva para reintentarlo).
      *
      * @return array<int, array{archivo: string, estado: string, nombre: ?string, mensaje: string}>
+     *
+     * @throws ErrorTemporalIA cuando la IA no pudo responder y vale la pena reintentar
      */
-    public function procesarArchivo(string $tipo, string $rutaRelativa, string $nombreOriginal): array
+    public function procesarArchivo(string $tipo, string $rutaRelativa, string $nombreOriginal, ?string $lote = null): array
     {
         $disco = Storage::disk('local');
 
         try {
-            $crudo = $this->conReintento(fn () => $this->extractor->extraer($disco->path($rutaRelativa), $tipo));
+            $crudo = $this->extractor->extraer($disco->path($rutaRelativa), $tipo);
 
             $esPdf = $disco->mimeType($rutaRelativa) === 'application/pdf';
 
-            return [$this->crear($tipo, $crudo, $nombreOriginal, $esPdf ? $rutaRelativa : null)];
+            return [$this->crear($tipo, $crudo, $nombreOriginal, $esPdf ? $rutaRelativa : null, $lote)];
+        } catch (ErrorTemporalIA $e) {
+            throw $e;
         } catch (Throwable $e) {
             report($e);
 
             return [$this->fila($nombreOriginal, 'error', null, $e->getMessage())];
-        } finally {
-            // Si el PDF se adjuntó ya fue movido; en cualquier otro caso es temporal.
-            $disco->delete($rutaRelativa);
         }
     }
 
     /**
      * Un PDF con varias responsivas: solo se crean los registros (sin adjuntos).
+     * Con $desde y $hasta se leen solo las responsivas que empiezan en ese rango de
+     * páginas, para procesar PDF grandes por bloques.
      *
      * @return array<int, array{archivo: string, estado: string, nombre: ?string, mensaje: string}>
+     *
+     * @throws ErrorTemporalIA
      */
-    public function procesarPdfUnico(string $tipo, string $rutaRelativa, string $nombreOriginal): array
+    public function procesarPdfUnico(string $tipo, string $rutaRelativa, string $nombreOriginal, ?int $desde = null, ?int $hasta = null, ?string $lote = null): array
     {
         $disco = Storage::disk('local');
+        $bloque = $desde !== null && $hasta !== null;
+        $sufijo = $bloque ? " · págs. {$desde}-{$hasta}" : '';
 
         try {
-            $lista = $this->conReintento(fn () => $this->extractor->extraerVarios($disco->path($rutaRelativa), $tipo));
+            $lista = $this->extractor->extraerVarios($disco->path($rutaRelativa), $tipo, $desde, $hasta);
 
             if ($lista === []) {
-                return [$this->fila($nombreOriginal, 'error', null, 'No se detectó ninguna responsiva en el PDF.')];
+                // En un bloque sin responsivas no es un error; si ningún bloque encuentra
+                // nada, la página lo avisa al terminar.
+                return $bloque ? [] : [$this->fila($nombreOriginal, 'error', null, 'No se detectó ninguna responsiva en el PDF.')];
             }
 
             $filas = [];
             foreach ($lista as $i => $crudo) {
-                $filas[] = $this->crear($tipo, $crudo, $nombreOriginal . ' · responsiva ' . ($i + 1), null);
+                $filas[] = $this->crear($tipo, $crudo, $nombreOriginal . $sufijo . ' · responsiva ' . ($i + 1), null, $lote);
             }
 
             return $filas;
+        } catch (ErrorTemporalIA $e) {
+            throw $e;
         } catch (Throwable $e) {
             report($e);
 
-            return [$this->fila($nombreOriginal, 'error', null, $e->getMessage())];
-        } finally {
-            $disco->delete($rutaRelativa);
+            return [$this->fila($nombreOriginal . $sufijo, 'error', null, $e->getMessage())];
         }
     }
 
     /**
-     * Plantilla de Excel (o CSV): una fila por equipo, sin IA ni adjuntos.
+     * Páginas del PDF, o null si no se pudieron contar (se procesa entero).
+     */
+    public function contarPaginasPdf(string $rutaRelativa): ?int
+    {
+        return $this->extractor->contarPaginas(Storage::disk('local')->path($rutaRelativa));
+    }
+
+    /**
+     * Cantidad de filas con datos del Excel/CSV. Falla con un mensaje claro si el
+     * archivo no sirve (formato, encabezados, demasiadas filas…).
+     *
+     * @throws RuntimeException
+     */
+    public function contarFilasExcel(string $tipo, string $rutaRelativa, string $nombreOriginal): int
+    {
+        return count($this->excel->leer(Storage::disk('local')->path($rutaRelativa), pathinfo($nombreOriginal, PATHINFO_EXTENSION), $tipo));
+    }
+
+    /**
+     * Plantilla de Excel (o CSV): una fila por equipo, sin IA ni adjuntos. Se crean
+     * $cantidad filas a partir de la posición $desde (0 = la primera fila con datos).
      *
      * @return array<int, array{archivo: string, estado: string, nombre: ?string, mensaje: string}>
      */
-    public function procesarExcel(string $tipo, string $rutaRelativa, string $nombreOriginal): array
+    public function procesarExcel(string $tipo, string $rutaRelativa, string $nombreOriginal, int $desde = 0, ?int $cantidad = null, ?string $lote = null): array
     {
         $disco = Storage::disk('local');
 
@@ -105,11 +145,11 @@ class CargaMasivaRegistros
             }
 
             $resultado = [];
-            foreach ($filas as $fila) {
+            foreach (array_slice($filas, $desde, $cantidad) as $fila) {
                 $origen = $nombreOriginal . ' · fila ' . $fila['fila'];
 
                 try {
-                    $resultado[] = $this->crear($tipo, $fila['datos'], $origen, null);
+                    $resultado[] = $this->crear($tipo, $fila['datos'], $origen, null, $lote);
                 } catch (Throwable $e) {
                     report($e);
                     $resultado[] = $this->fila($origen, 'error', $fila['datos']['nombre_completo'] ?? $fila['datos']['nombre_colaborador'] ?? null, $e->getMessage());
@@ -121,8 +161,22 @@ class CargaMasivaRegistros
             report($e);
 
             return [$this->fila($nombreOriginal, 'error', null, $e->getMessage())];
-        } finally {
-            $disco->delete($rutaRelativa);
+        }
+    }
+
+    /**
+     * Borra los archivos temporales de cargas abandonadas (se cerró la página a la
+     * mitad, se perdió la conexión…).
+     */
+    public static function limpiarTemporales(int $horas = 24): void
+    {
+        $disco = Storage::disk('local');
+        $limite = now()->subHours($horas)->getTimestamp();
+
+        foreach ($disco->files(self::CARPETA_TEMPORAL) as $archivo) {
+            if ($disco->lastModified($archivo) < $limite) {
+                $disco->delete($archivo);
+            }
         }
     }
 
@@ -131,7 +185,7 @@ class CargaMasivaRegistros
      * @param  string|null  $adjunto  ruta (disco local) del PDF a adjuntar como responsiva
      * @return array{archivo: string, estado: string, nombre: ?string, mensaje: string}
      */
-    private function crear(string $tipo, array $crudo, string $origen, ?string $adjunto): array
+    private function crear(string $tipo, array $crudo, string $origen, ?string $adjunto, ?string $lote = null): array
     {
         $celular = $tipo === ExtractorResponsivaPdf::TIPO_CELULAR;
         $dispositivos = $tipo === ExtractorResponsivaPdf::TIPO_DISPOSITIVOS;
@@ -148,6 +202,7 @@ class CargaMasivaRegistros
         }
 
         $d['tipo_movimiento'] ??= $dispositivos ? 'entrega' : 'alta';
+        $d['lote_carga'] = $lote;
 
         // Si ya hay un registro activo que coincide, este se crea igual pero como BAJA y
         // pendiente de revisar: no se toca el registro existente ni se pierde el documento.
@@ -178,6 +233,8 @@ class CargaMasivaRegistros
         foreach ($obligatorios as $campo => $etiqueta) {
             $revisar($campo, $etiqueta);
         }
+
+        $revisar('fecha_entrega', 'Fecha de entrega');
 
         $d['nombre_usuario'] = $d['nombre_usuario'] ?? Str::limit('Sin nombre (' . $origen . ')', 250, '');
         if (blank($crudo['nombre_completo'] ?? $crudo['nombre_colaborador'] ?? null)) {
@@ -227,7 +284,16 @@ class CargaMasivaRegistros
             $d['responsiva_pdf'] = $this->adjuntar($adjunto, $d['nombre_usuario'], $tipo);
         }
 
-        $registro = $modelo::create($d);
+        try {
+            $registro = $modelo::create($d);
+        } catch (Throwable $e) {
+            // Si el registro no se pudo crear, el PDF ya movido no debe quedar huérfano.
+            if ($adjunto) {
+                Storage::disk('local')->delete($d['responsiva_pdf']);
+            }
+
+            throw $e;
+        }
 
         $detalle = $faltantes ? ' Falta: ' . implode(', ', array_unique($faltantes)) . '.' : '';
 
@@ -306,25 +372,6 @@ class CargaMasivaRegistros
         Storage::disk('local')->move($rutaTemporal, $destino);
 
         return $destino;
-    }
-
-    /**
-     * El nivel gratuito de la IA limita las solicitudes por minuto: ante un 429 se
-     * espera y se reintenta una vez antes de marcar el archivo con error.
-     */
-    private function conReintento(\Closure $accion): mixed
-    {
-        try {
-            return $accion();
-        } catch (RuntimeException $e) {
-            if (! str_contains($e->getMessage(), 'límite gratuito')) {
-                throw $e;
-            }
-
-            sleep(20);
-
-            return $accion();
-        }
     }
 
     /**
