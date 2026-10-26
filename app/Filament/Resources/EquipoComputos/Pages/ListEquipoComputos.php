@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\EquipoComputos\Pages;
 
 use App\Filament\Resources\EquipoComputos\EquipoComputoResource;
+use App\Filament\Actions\DescargarResponsivasAction;
 use App\Filament\Actions\ExportarExcelAction;
 use App\Services\ReporteInventario;
 use Filament\Actions\CreateAction;
@@ -16,6 +17,7 @@ class ListEquipoComputos extends ListRecords
     {
         return [
             ExportarExcelAction::make(ReporteInventario::COMPUTO),
+            DescargarResponsivasAction::make(ReporteInventario::COMPUTO),
             CreateAction::make(),
         ];
     }

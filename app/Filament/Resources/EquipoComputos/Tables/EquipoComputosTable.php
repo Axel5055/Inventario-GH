@@ -4,6 +4,7 @@ namespace App\Filament\Resources\EquipoComputos\Tables;
 
 use App\Support\OpcionesOrdenadas;
 use Filament\Actions\Action;
+use App\Filament\Actions\DescargarResponsivasAction;
 use App\Filament\Actions\ExportarExcelAction;
 use App\Services\ReporteInventario;
 use App\Support\ResponsivaBaja;
@@ -180,6 +181,7 @@ class EquipoComputosTable
             ->bulkActions([
                 BulkActionGroup::make([
                     ExportarExcelAction::enLote(ReporteInventario::COMPUTO),
+                    DescargarResponsivasAction::enLote(ReporteInventario::COMPUTO),
                     DeleteBulkAction::make(),
                 ]),
             ])

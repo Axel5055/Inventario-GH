@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\RazonSocial;
 use App\Models\Sucursal;
+use App\Services\DescargaResponsivas;
 use App\Services\ReporteInventario;
 use App\Support\OpcionesOrdenadas;
 use BackedEnum;
@@ -18,6 +19,7 @@ use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use RuntimeException;
 use UnitEnum;
 
 class Reportes extends Page implements HasSchemas
@@ -135,6 +137,38 @@ class Reportes extends Page implements HasSchemas
         }
 
         return app(ReporteInventario::class)->descargarCombinado($secciones, $this->filtros(), auth()->user()->name ?? '');
+    }
+
+    /**
+     * ZIP con las responsivas de los registros que cumplen los mismos filtros.
+     */
+    public function descargarResponsivas()
+    {
+        $this->form->validate();
+
+        $permitidas = $this->seccionesPermitidas();
+        $secciones = array_values(array_filter($this->data['secciones'] ?? [], fn ($s) => array_key_exists($s, $permitidas)));
+
+        if ($secciones === []) {
+            Notification::make()->title('Selecciona al menos una sección')->warning()->send();
+
+            return null;
+        }
+
+        $servicio = app(ReporteInventario::class);
+        $porSeccion = [];
+
+        foreach ($secciones as $seccion) {
+            $porSeccion[$seccion] = $servicio->consulta($seccion, $this->filtros())->get();
+        }
+
+        try {
+            return app(DescargaResponsivas::class)->zip($porSeccion);
+        } catch (RuntimeException $e) {
+            Notification::make()->title('No se pudo descargar')->body($e->getMessage())->warning()->send();
+
+            return null;
+        }
     }
 
     /**

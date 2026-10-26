@@ -18,9 +18,15 @@
                 @endif
             </p>
 
-            <x-filament::button type="submit" icon="heroicon-o-arrow-down-tray" wire:loading.attr="disabled" wire:target="descargar">
-                Descargar Excel
-            </x-filament::button>
+            <div class="flex flex-wrap gap-3">
+                <x-filament::button type="button" color="gray" icon="heroicon-o-archive-box-arrow-down" wire:click="descargarResponsivas" wire:loading.attr="disabled" wire:target="descargarResponsivas">
+                    Descargar responsivas (ZIP)
+                </x-filament::button>
+
+                <x-filament::button type="submit" icon="heroicon-o-arrow-down-tray" wire:loading.attr="disabled" wire:target="descargar">
+                    Descargar Excel
+                </x-filament::button>
+            </div>
         </div>
     </form>
 </x-filament-panels::page>

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\EntregaDispositivos\Pages;
 
 use App\Filament\Resources\EntregaDispositivos\EntregaDispositivoResource;
+use App\Filament\Actions\DescargarResponsivasAction;
 use App\Filament\Actions\ExportarExcelAction;
 use App\Services\ReporteInventario;
 use Filament\Actions\CreateAction;
@@ -16,6 +17,7 @@ class ListEntregaDispositivos extends ListRecords
     {
         return [
             ExportarExcelAction::make(ReporteInventario::DISPOSITIVOS),
+            DescargarResponsivasAction::make(ReporteInventario::DISPOSITIVOS),
             CreateAction::make(),
         ];
     }
