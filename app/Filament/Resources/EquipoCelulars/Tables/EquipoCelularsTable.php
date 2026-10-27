@@ -70,6 +70,7 @@ class EquipoCelularsTable
 
                 TextColumn::make('razonSocial.nombre')
                     ->label('Razón Social')
+                    ->searchable()
                     ->sortable()
                     ->toggleable(),
 

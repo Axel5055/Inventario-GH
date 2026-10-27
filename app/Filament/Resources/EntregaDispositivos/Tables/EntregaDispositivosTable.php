@@ -53,6 +53,7 @@ class EntregaDispositivosTable
                     ->toggleable(),
                 TextColumn::make('razonSocial.nombre')
                     ->label('Razón Social')
+                    ->searchable()
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('sucursal.nombre')
