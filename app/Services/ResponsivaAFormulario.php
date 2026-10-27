@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Area;
 use App\Models\Marca;
+use App\Models\RazonSocial;
 use App\Models\Sucursal;
 use App\Models\TipoDispositivo;
 use Carbon\Carbon;
@@ -43,6 +44,12 @@ class ResponsivaAFormulario
     private function sucursales(): Collection
     {
         return $this->catalogoDe('sucursales', fn () => Sucursal::where('activo', true)->pluck('nombre', 'id'));
+    }
+
+    /** @return Collection<int, string> */
+    private function razonesSociales(): Collection
+    {
+        return $this->catalogoDe('razones_sociales', fn () => RazonSocial::where('activo', true)->pluck('nombre', 'id'));
     }
 
     /** @return Collection<int, string> */
@@ -207,6 +214,9 @@ class ResponsivaAFormulario
         $datos['correo_electronico'] = $this->limpio($d['correo'] ?? null);
         $this->revisarCorreo($datos['correo_electronico'], $avisos);
 
+        $datos['razon_social_id'] = $this->catalogo(
+            $this->razonesSociales(), $d['razon_social'] ?? null, 'Razón social', $avisos
+        );
         $datos['sucursal_id'] = $this->catalogo(
             $this->sucursales(), $d['sucursal'] ?? null, 'Sucursal', $avisos
         );

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Area;
 use App\Models\Marca;
+use App\Models\RazonSocial;
 use App\Models\Sucursal;
 use App\Models\TipoDispositivo;
 use Carbon\Carbon;
@@ -68,6 +69,7 @@ class ExcelRegistros
             $columnas['Tipo de movimiento']['ayuda'] = 'Entrega o Devolución. Vacío = Entrega.';
 
             return $columnas + [
+                'Razón social' => ['clave' => 'razon_social', 'obligatoria' => false, 'ayuda' => 'Escríbela como está en el catálogo (hoja Catálogos).', 'aliases' => ['razon', 'empresa']],
                 'Correo' => ['clave' => 'correo', 'obligatoria' => false, 'ayuda' => 'Correo de la persona.', 'aliases' => ['correo electronico', 'email', 'e-mail']],
                 'Tipo de dispositivo' => ['clave' => 'tipo_dispositivo', 'obligatoria' => false, 'ayuda' => 'Como está en el catálogo (hoja Catálogos). Si no existe se usa «Otro».', 'aliases' => ['tipo']],
                 'Descripción' => ['clave' => 'descripcion', 'obligatoria' => false, 'ayuda' => 'Ej. Disco duro externo 1 TB.', 'aliases' => ['descripcion del dispositivo', 'dispositivo', 'detalle']],
@@ -147,6 +149,7 @@ class ExcelRegistros
             ];
 
             if ($dispositivos) {
+                $listas = ['Razones sociales' => RazonSocial::where('activo', true)->orderBy('nombre')->pluck('nombre')->all()] + $listas;
                 $listas['Tipos de dispositivo'] = TipoDispositivo::where('activo', true)->orderBy('nombre')->pluck('nombre')->all();
             }
             $writer->addRow(Row::fromValues(array_keys($listas), $negrita));
