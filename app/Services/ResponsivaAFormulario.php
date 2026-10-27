@@ -233,6 +233,7 @@ class ResponsivaAFormulario
 
         $datos['modelo'] = $this->limpio($d['modelo'] ?? null, 150);
         $datos['numero_serie'] = $this->limpio($d['numero_serie'] ?? null, 200);
+        $datos['cantidad'] = $this->cantidad($d['cantidad'] ?? null);
         $datos['observaciones'] = $this->limpio($d['observaciones'] ?? null);
 
         $descripcion = $this->limpio($d['descripcion'] ?? null, 255);
@@ -494,6 +495,20 @@ class ResponsivaAFormulario
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Piezas entregadas: entero de 1 en adelante (vacío o inválido = 1).
+     */
+    private function cantidad(mixed $valor): int
+    {
+        $texto = trim((string) $valor);
+
+        if (is_numeric($texto)) {
+            return max(1, (int) floor((float) $texto));
+        }
+
+        return max(1, preg_match('/\d+/', $texto, $m) ? (int) $m[0] : 1);
     }
 
     /**

@@ -277,6 +277,7 @@ class ReporteInventario
                 'Descripción' => fn ($r) => $r->descripcion,
                 'Marca' => fn ($r) => $r->marca,
                 'Modelo' => fn ($r) => $r->modelo,
+                'Cantidad' => fn ($r) => $r->cantidad,
                 'No. de serie' => fn ($r) => $r->numero_serie,
                 'Origen del registro' => fn ($r) => self::ORIGENES[$r->origen_registro] ?? 'Administración',
                 'Revisión' => fn ($r) => $r->estado_revision === 'pendiente' ? 'Pendiente' : 'Completo',

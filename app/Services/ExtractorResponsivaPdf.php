@@ -587,6 +587,7 @@ TXT;
                 'descripcion' => $texto + ['description' => 'Descripción del dispositivo tal como está escrita.'],
                 'marca' => $texto,
                 'modelo' => $texto,
+                'cantidad' => ['type' => ['integer', 'null'], 'description' => 'Cuántas piezas de este dispositivo se entregan (mínimo 1). null si no se indica.'],
                 'numero_serie' => $texto,
                 'observaciones' => $texto,
             ],

@@ -29,6 +29,7 @@ class EntregaDispositivo extends Model
         'marca',
         'modelo',
         'numero_serie',
+        'cantidad',
         'observaciones',
         'responsiva_pdf',
         'origen_registro',
@@ -38,6 +39,7 @@ class EntregaDispositivo extends Model
 
     protected $casts = [
         'fecha_entrega' => 'date',
+        'cantidad' => 'integer',
     ];
 
     public function razonSocial(): BelongsTo

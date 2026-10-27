@@ -159,6 +159,11 @@ class EntregaDispositivoInfolist
                                         ->icon('heroicon-o-squares-2x2')
                                         ->placeholder('Sin modelo'),
 
+                                    TextEntry::make('cantidad')
+                                        ->label('Cantidad')
+                                        ->numeric()
+                                        ->icon('heroicon-o-hashtag'),
+
                                     TextEntry::make('numero_serie')
                                         ->label('Número de Serie')
                                         ->badge()

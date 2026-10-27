@@ -214,8 +214,16 @@ class EntregaDispositivoForm
                                             TextInput::make('numero_serie')
                                                 ->label('Número de Serie')
                                                 ->maxLength(200)
-                                                ->placeholder('Opcional')
-                                                ->columnSpanFull(),
+                                                ->placeholder('Opcional'),
+
+                                            TextInput::make('cantidad')
+                                                ->label('Cantidad')
+                                                ->numeric()
+                                                ->integer()
+                                                ->minValue(1)
+                                                ->default(1)
+                                                ->required()
+                                                ->helperText('Piezas que se entregan. Mínimo 1.'),
 
                                             Textarea::make('observaciones')
                                                 ->label('Observaciones')

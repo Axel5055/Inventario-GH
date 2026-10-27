@@ -73,6 +73,7 @@ class ExcelRegistros
                 'Descripción' => ['clave' => 'descripcion', 'obligatoria' => false, 'ayuda' => 'Ej. Disco duro externo 1 TB.', 'aliases' => ['descripcion del dispositivo', 'dispositivo', 'detalle']],
                 'Marca' => ['clave' => 'marca', 'obligatoria' => false, 'ayuda' => 'Como está en el catálogo de marcas.', 'aliases' => []],
                 'Modelo' => ['clave' => 'modelo', 'obligatoria' => false, 'ayuda' => '', 'aliases' => []],
+                'Cantidad' => ['clave' => 'cantidad', 'obligatoria' => false, 'ayuda' => 'Número entero, mínimo 1. Vacío = 1.', 'aliases' => ['cant', 'piezas', 'unidades']],
                 'Número de serie' => ['clave' => 'numero_serie', 'obligatoria' => false, 'ayuda' => 'Opcional. En dispositivos no se revisan repetidos.', 'aliases' => ['serie', 'no de serie', 'sn']],
                 'Observaciones' => ['clave' => 'observaciones', 'obligatoria' => false, 'ayuda' => '', 'aliases' => ['notas', 'comentarios']],
             ];

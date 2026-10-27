@@ -78,6 +78,11 @@ class EntregaDispositivosTable
                 TextColumn::make('modelo')
                     ->searchable()
                     ->toggleable(),
+                TextColumn::make('cantidad')
+                    ->label('Cant.')
+                    ->numeric()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('numero_serie')
                     ->label('No. Serie')
                     ->searchable()
