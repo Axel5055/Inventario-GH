@@ -91,6 +91,9 @@ class ResponsivaAFormulario
         $this->revisarCorreo($datos['correo_electronico'], $avisos);
         $datos['ext'] = $this->soloDigitos($d['extension'] ?? null, 5);
 
+        $datos['razon_social_id'] = $this->catalogo(
+            $this->razonesSociales(), $d['razon_social'] ?? null, 'Razón social', $avisos
+        );
         $datos['sucursal_id'] = $this->catalogo(
             $this->sucursales(), $d['sucursal'] ?? null, 'Sucursal', $avisos
         );
@@ -167,6 +170,9 @@ class ResponsivaAFormulario
             $notaPuesto = "Puesto / Área: {$puestoArea}";
         }
 
+        $datos['razon_social_id'] = $this->catalogo(
+            $this->razonesSociales(), $d['razon_social'] ?? null, 'Razón social', $avisos
+        );
         $datos['sucursal_id'] = $this->catalogo(
             $this->sucursales(), $d['sucursal'] ?? null, 'Sucursal', $avisos
         );

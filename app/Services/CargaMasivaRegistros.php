@@ -226,7 +226,7 @@ class CargaMasivaRegistros
 
         $obligatorios = $dispositivos
             ? ['razon_social_id' => 'Razón social', 'sucursal_id' => 'Sucursal', 'area_id' => 'Área', 'correo_electronico' => 'Correo', 'tipo_dispositivo' => 'Tipo de dispositivo', 'descripcion' => 'Descripción']
-            : ['sucursal_id' => 'Sucursal', 'area_id' => 'Área', 'marca_id' => 'Marca', 'modelo' => 'Modelo'] + ($celular
+            : ['razon_social_id' => 'Razón social', 'sucursal_id' => 'Sucursal', 'area_id' => 'Área', 'marca_id' => 'Marca', 'modelo' => 'Modelo'] + ($celular
                 ? ['imei' => 'IMEI', 'numero_telefonico' => 'Número telefónico', 'tipo_equipo' => 'Tipo de equipo']
                 : ['numero_serie' => 'Número de serie', 'correo_electronico' => 'Correo', 'tipo_equipo' => 'Tipo de equipo']);
 

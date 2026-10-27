@@ -59,6 +59,7 @@ class ExcelRegistros
         $comunes = fn (string $nombreClave, string $areaClave, string $fechaClave) => [
             'Nombre completo' => ['clave' => $nombreClave, 'obligatoria' => true, 'ayuda' => 'Nombre de la persona a quien se entrega el equipo.', 'aliases' => ['nombre', 'usuario', 'nombre del usuario', 'colaborador']],
             'Área' => ['clave' => $areaClave, 'obligatoria' => false, 'ayuda' => 'Escríbela como está en el catálogo (ver hojas de abajo).', 'aliases' => ['area', 'departamento']],
+            'Razón social' => ['clave' => 'razon_social', 'obligatoria' => false, 'ayuda' => 'Escríbela como está en el catálogo (hoja Catálogos).', 'aliases' => ['razon', 'empresa']],
             'Sucursal' => ['clave' => 'sucursal', 'obligatoria' => false, 'ayuda' => 'Escríbela como está en el catálogo.', 'aliases' => ['unidad']],
             'Tipo de movimiento' => ['clave' => 'tipo_movimiento', 'obligatoria' => false, 'ayuda' => 'Alta, Baja, Cambio de equipo, Reasignación, Mantenimiento o Préstamo temporal. Vacío = Alta.', 'aliases' => ['movimiento', 'status']],
             'Fecha de entrega' => ['clave' => $fechaClave, 'obligatoria' => false, 'ayuda' => 'Fecha (ej. 25/10/2026). Vacío = hoy.', 'aliases' => ['fecha', 'fecha de movimiento']],
@@ -69,7 +70,6 @@ class ExcelRegistros
             $columnas['Tipo de movimiento']['ayuda'] = 'Entrega o Devolución. Vacío = Entrega.';
 
             return $columnas + [
-                'Razón social' => ['clave' => 'razon_social', 'obligatoria' => false, 'ayuda' => 'Escríbela como está en el catálogo (hoja Catálogos).', 'aliases' => ['razon', 'empresa']],
                 'Correo' => ['clave' => 'correo', 'obligatoria' => false, 'ayuda' => 'Correo de la persona.', 'aliases' => ['correo electronico', 'email', 'e-mail']],
                 'Tipo de dispositivo' => ['clave' => 'tipo_dispositivo', 'obligatoria' => false, 'ayuda' => 'Como está en el catálogo (hoja Catálogos). Si no existe se usa «Otro».', 'aliases' => ['tipo']],
                 'Descripción' => ['clave' => 'descripcion', 'obligatoria' => false, 'ayuda' => 'Ej. Disco duro externo 1 TB.', 'aliases' => ['descripcion del dispositivo', 'dispositivo', 'detalle']],
@@ -143,13 +143,13 @@ class ExcelRegistros
 
             $writer->addNewSheetAndMakeItCurrent()->setName('Catálogos');
             $listas = [
+                'Razones sociales' => RazonSocial::where('activo', true)->orderBy('nombre')->pluck('nombre')->all(),
                 'Sucursales' => Sucursal::where('activo', true)->orderBy('nombre')->pluck('nombre')->all(),
                 'Áreas' => Area::where('activo', true)->orderBy('nombre')->pluck('nombre')->all(),
                 'Marcas' => ($dispositivos ? Marca::activas() : ($celular ? Marca::activas()->deCelular() : Marca::activas()->deComputo()))->orderBy('nombre')->pluck('nombre')->all(),
             ];
 
             if ($dispositivos) {
-                $listas = ['Razones sociales' => RazonSocial::where('activo', true)->orderBy('nombre')->pluck('nombre')->all()] + $listas;
                 $listas['Tipos de dispositivo'] = TipoDispositivo::where('activo', true)->orderBy('nombre')->pluck('nombre')->all();
             }
             $writer->addRow(Row::fromValues(array_keys($listas), $negrita));
