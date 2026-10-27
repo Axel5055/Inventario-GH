@@ -82,6 +82,7 @@ class EquipoComputosTable
 
                 TextColumn::make('sucursal.nombre')
                     ->label('Sucursal')
+                    ->searchable()
                     ->toggleable(),
 
                 TextColumn::make('tipo_equipo')

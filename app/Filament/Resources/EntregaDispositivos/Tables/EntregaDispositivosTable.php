@@ -58,6 +58,7 @@ class EntregaDispositivosTable
                     ->toggleable(),
                 TextColumn::make('sucursal.nombre')
                     ->label('Sucursal')
+                    ->searchable()
                     ->toggleable(),
                 TextColumn::make('area.nombre')
                     ->label('Área')
